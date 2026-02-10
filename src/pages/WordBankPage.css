@@ -1,0 +1,114 @@
+.wordbank-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wordbank-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  align-self: flex-start;
+}
+
+.wordbank-tab {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transition: all 0.2s;
+}
+
+.wordbank-tab.active {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.builtin-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.list-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.list-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.list-desc {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.user-words {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-words-header {
+  display: flex;
+  gap: 10px;
+}
+
+.user-words-header .input {
+  flex: 1;
+}
+
+.word-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.word-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.word-item-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.word-item-word {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.word-item-meaning {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.word-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.word-item-actions .btn {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-text-secondary);
+}

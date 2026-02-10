@@ -1,0 +1,67 @@
+.settings-page {
+  max-width: 500px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-page h2 {
+  font-size: 20px;
+}
+
+.settings-section h3 {
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.setting-item {
+  margin-bottom: 16px;
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
+}
+
+.setting-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.setting-value {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.setting-slider {
+  width: 100%;
+  accent-color: var(--color-primary);
+  height: 6px;
+}
+
+.data-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-message {
+  padding: 12px 16px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  text-align: center;
+}
+
+.settings-footer {
+  text-align: center;
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.settings-footer p {
+  margin-bottom: 4px;
+}

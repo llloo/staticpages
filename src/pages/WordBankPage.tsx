@@ -1,0 +1,224 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { WordListMeta, Word } from '../types';
+import {
+  getAllUserWords,
+  addWords,
+  batchUpsertCardStates,
+  deleteWord,
+  deleteWordsByListId,
+} from '../lib/storage';
+import { createInitialCardState } from '../lib/sm2';
+import { loadSettings, saveSettings } from '../lib/exportImport';
+import type { RawWordEntry } from '../types';
+import AudioButton from '../components/AudioButton';
+import './WordBankPage.css';
+
+type Tab = 'builtin' | 'user';
+
+export default function WordBankPage() {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>('builtin');
+  const [manifest, setManifest] = useState<WordListMeta[]>([]);
+  const [enabledIds, setEnabledIds] = useState<string[]>([]);
+  const [userWords, setUserWords] = useState<Word[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadingList, setLoadingList] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(
+          `${import.meta.env.BASE_URL}data/manifest.json`
+        );
+        const data: WordListMeta[] = await res.json();
+        setManifest(data);
+      } catch {
+        // No manifest available
+      }
+      const settings = loadSettings();
+      setEnabledIds(settings.enabledListIds);
+      const words = await getAllUserWords();
+      setUserWords(words);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const toggleList = async (listId: string) => {
+    if (enabledIds.includes(listId)) {
+      // Disable
+      await deleteWordsByListId(listId);
+      const newEnabled = enabledIds.filter((id) => id !== listId);
+      setEnabledIds(newEnabled);
+      const settings = loadSettings();
+      saveSettings({ ...settings, enabledListIds: newEnabled });
+    } else {
+      // Enable
+      setLoadingList(listId);
+      const meta = manifest.find((m) => m.id === listId);
+      if (!meta) return;
+
+      try {
+        const res = await fetch(
+          `${import.meta.env.BASE_URL}data/${meta.filename}`
+        );
+        const rawWords: RawWordEntry[] = await res.json();
+        const words: Word[] = rawWords.map((w, i) => ({
+          id: `${listId}:${i}`,
+          word: w.word,
+          phonetic: w.phonetic,
+          audio: w.audio,
+          definitions: w.definitions,
+          example: w.example,
+          tags: [meta.name],
+          source: 'builtin' as const,
+          listId,
+        }));
+
+        await addWords(words);
+        const cardStates = words.map((w) => createInitialCardState(w.id));
+        await batchUpsertCardStates(cardStates);
+
+        const newEnabled = [...enabledIds, listId];
+        setEnabledIds(newEnabled);
+        const settings = loadSettings();
+        saveSettings({ ...settings, enabledListIds: newEnabled });
+      } catch (err) {
+        console.error('Failed to load word list:', err);
+      }
+      setLoadingList(null);
+    }
+  };
+
+  const handleDeleteWord = async (id: string) => {
+    if (!confirm('确定要删除这个单词吗？')) return;
+    await deleteWord(id);
+    setUserWords((prev) => prev.filter((w) => w.id !== id));
+  };
+
+  const filteredUserWords = userWords.filter(
+    (w) =>
+      w.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      w.definitions.some((d) =>
+        d.meaning.includes(searchQuery)
+      )
+  );
+
+  if (loading) {
+    return <div className="loading">加载中...</div>;
+  }
+
+  return (
+    <div className="wordbank-page">
+      <div className="wordbank-tabs">
+        <button
+          className={`wordbank-tab ${tab === 'builtin' ? 'active' : ''}`}
+          onClick={() => setTab('builtin')}
+        >
+          内置词库
+        </button>
+        <button
+          className={`wordbank-tab ${tab === 'user' ? 'active' : ''}`}
+          onClick={() => setTab('user')}
+        >
+          我的单词
+        </button>
+      </div>
+
+      {tab === 'builtin' && (
+        <div className="builtin-lists">
+          {manifest.length === 0 && (
+            <div className="empty-state">暂无可用词库</div>
+          )}
+          {manifest.map((meta) => (
+            <div key={meta.id} className="list-card card">
+              <div className="list-info">
+                <div className="list-name">{meta.name}</div>
+                <div className="list-desc text-secondary">
+                  {meta.description} ({meta.wordCount} 词)
+                </div>
+              </div>
+              <button
+                className={`btn ${
+                  enabledIds.includes(meta.id)
+                    ? 'btn-outline'
+                    : 'btn-primary'
+                }`}
+                onClick={() => toggleList(meta.id)}
+                disabled={loadingList === meta.id}
+              >
+                {loadingList === meta.id
+                  ? '加载中...'
+                  : enabledIds.includes(meta.id)
+                    ? '已启用'
+                    : '启用'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'user' && (
+        <div className="user-words">
+          <div className="user-words-header">
+            <input
+              className="input"
+              type="text"
+              placeholder="搜索单词..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={() => navigate('/words/add')}
+            >
+              添加单词
+            </button>
+          </div>
+
+          {filteredUserWords.length === 0 ? (
+            <div className="empty-state">
+              {searchQuery ? '没有匹配的单词' : '还没有添加自定义单词'}
+            </div>
+          ) : (
+            <div className="word-list">
+              {filteredUserWords.map((word) => (
+                <div key={word.id} className="word-item card">
+                  <div className="word-item-main">
+                    <div className="word-item-header">
+                      <div className="word-item-word">{word.word}</div>
+                      <AudioButton audioFile={word.audio} size="small" />
+                    </div>
+                    <div className="word-item-meaning text-secondary">
+                      {word.definitions
+                        .map((d) => `${d.pos} ${d.meaning}`)
+                        .join('；')}
+                    </div>
+                  </div>
+                  <div className="word-item-actions">
+                    <button
+                      className="btn btn-outline"
+                      onClick={() =>
+                        navigate(`/words/edit/${word.id}`)
+                      }
+                    >
+                      编辑
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => handleDeleteWord(word.id)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
