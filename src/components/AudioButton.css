@@ -1,0 +1,49 @@
+.audio-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.audio-btn:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
+.audio-btn:active {
+  transform: scale(0.9);
+}
+
+.audio-btn-small {
+  width: 28px;
+  height: 28px;
+}
+
+.audio-btn-small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.audio-btn-medium {
+  width: 36px;
+  height: 36px;
+}
+
+.audio-btn-medium svg {
+  width: 18px;
+  height: 18px;
+}
+
+.audio-btn-large {
+  width: 44px;
+  height: 44px;
+}
+
+.audio-btn-large svg {
+  width: 22px;
+  height: 22px;
+}
