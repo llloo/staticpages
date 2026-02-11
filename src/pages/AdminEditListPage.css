@@ -1,0 +1,103 @@
+.admin-edit-page {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-edit-page h2 {
+  font-size: 20px;
+}
+
+.admin-error {
+  padding: 10px 14px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+
+.admin-words-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-words-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-word-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-word-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.admin-word-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-word-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.admin-word-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.admin-word-phonetic {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.admin-word-defs {
+  font-size: 13px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-word-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.admin-word-actions .btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.admin-word-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.admin-editor-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-add-word-btn {
+  align-self: flex-start;
+  font-size: 13px;
+}

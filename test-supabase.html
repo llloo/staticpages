@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Supabase Connection Test</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+    .success { color: green; }
+    .error { color: red; }
+    button { padding: 10px 20px; margin: 5px; }
+    pre { background: #f5f5f5; padding: 10px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Supabase 连接测试</h1>
+
+  <div>
+    <h3>环境变量检查</h3>
+    <button onclick="checkEnv()">检查环境变量</button>
+    <div id="env-result"></div>
+  </div>
+
+  <div>
+    <h3>注册测试</h3>
+    <input id="email" type="email" placeholder="test@example.com" style="padding: 8px; width: 200px;">
+    <input id="password" type="password" placeholder="password123" style="padding: 8px; width: 150px;">
+    <button onclick="testSignUp()">测试注册</button>
+    <div id="signup-result"></div>
+  </div>
+
+  <div>
+    <h3>登录测试</h3>
+    <button onclick="testSignIn()">使用上面的邮箱密码登录</button>
+    <div id="signin-result"></div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'YOUR_URL';
+    const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_KEY';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    window.supabase = supabase;
+
+    window.checkEnv = () => {
+      const result = document.getElementById('env-result');
+      result.innerHTML = `
+        <pre>
+VITE_SUPABASE_URL: ${SUPABASE_URL}
+VITE_SUPABASE_ANON_KEY: ${SUPABASE_KEY.substring(0, 20)}...
+        </pre>
+        ${SUPABASE_URL.includes('YOUR') ? '<p class="error">❌ 环境变量未配置！</p>' : '<p class="success">✅ 环境变量已配置</p>'}
+      `;
+    };
+
+    window.testSignUp = async () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const result = document.getElementById('signup-result');
+
+      if (!email || !password) {
+        result.innerHTML = '<p class="error">请输入邮箱和密码</p>';
+        return;
+      }
+
+      result.innerHTML = '<p>注册中...</p>';
+
+      try {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+
+        if (error) {
+          result.innerHTML = `<p class="error">❌ 注册失败：${error.message}</p>`;
+        } else {
+          result.innerHTML = `
+            <p class="success">✅ 注册成功！</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        }
+      } catch (err) {
+        result.innerHTML = `<p class="error">❌ 网络错误：${err.message}</p>`;
+      }
+    };
+
+    window.testSignIn = async () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const result = document.getElementById('signin-result');
+
+      if (!email || !password) {
+        result.innerHTML = '<p class="error">请输入邮箱和密码</p>';
+        return;
+      }
+
+      result.innerHTML = '<p>登录中...</p>';
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+          result.innerHTML = `<p class="error">❌ 登录失败：${error.message}</p>`;
+        } else {
+          result.innerHTML = `
+            <p class="success">✅ 登录成功！</p>
+            <pre>${JSON.stringify(data.user, null, 2)}</pre>
+          `;
+        }
+      } catch (err) {
+        result.innerHTML = `<p class="error">❌ 网络错误：${err.message}</p>`;
+      }
+    };
+
+    // Auto check on load
+    window.checkEnv();
+  </script>
+</body>
+</html>
