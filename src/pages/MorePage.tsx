@@ -1,18 +1,8 @@
 import { useNavigate } from 'react-router-dom';
+import { useAdmin } from '../hooks/useAdmin';
 import './MorePage.css';
 
 const menuItems = [
-  {
-    label: '词库管理',
-    desc: '内置词库与自定义单词',
-    path: '/words',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-      </svg>
-    ),
-  },
   {
     label: '测验模式',
     desc: '选择题与拼写测验',
@@ -38,7 +28,7 @@ const menuItems = [
   },
   {
     label: '设置',
-    desc: '每日限额、导入导出、数据管理',
+    desc: '每日限额与账号管理',
     path: '/settings',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -51,11 +41,28 @@ const menuItems = [
 
 export default function MorePage() {
   const navigate = useNavigate();
+  const { isAdmin } = useAdmin();
+
+  const allItems = isAdmin
+    ? [
+        ...menuItems,
+        {
+          label: '管理后台',
+          desc: '词库管理（管理员）',
+          path: '/admin',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          ),
+        },
+      ]
+    : menuItems;
 
   return (
     <div className="more-page">
       <div className="more-list">
-        {menuItems.map((item) => (
+        {allItems.map((item) => (
           <button
             key={item.path}
             className="more-item card"

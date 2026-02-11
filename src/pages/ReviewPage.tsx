@@ -7,7 +7,7 @@ import {
   deriveCardStatus,
   calculateDueDate,
 } from '../lib/sm2';
-import { getWord, upsertCardState, addReviewLog } from '../lib/storage';
+import { getWordsByIds, upsertCardState, addReviewLog } from '../lib/storage';
 import { loadSettings, updateStreak } from '../lib/exportImport';
 import type { CardState, Word } from '../types';
 import AudioButton from '../components/AudioButton';
@@ -43,16 +43,20 @@ export default function ReviewPage() {
 
   useEffect(() => {
     async function loadQueue() {
-      const settings = loadSettings();
+      const settings = await loadSettings();
       const { reviewCards, newCards } = await getDueCards(
         settings.dailyNewCardLimit,
         settings.dailyReviewLimit
       );
       const allCards = [...reviewCards, ...newCards];
-      const reviewQueue: ReviewCard[] = [];
 
+      // Batch load all words in a single query
+      const wordIds = allCards.map((c) => c.wordId);
+      const wordMap = await getWordsByIds(wordIds);
+
+      const reviewQueue: ReviewCard[] = [];
       for (const card of allCards) {
-        const word = await getWord(card.wordId);
+        const word = wordMap.get(card.wordId);
         if (word) {
           reviewQueue.push({ cardState: card, word });
         }
@@ -60,7 +64,6 @@ export default function ReviewPage() {
 
       setQueue(reviewQueue);
       if (reviewQueue.length === 0) {
-        // Check if there are any cards at all
         const allCheck = await getDueCards(9999, 9999);
         if (allCheck.reviewCards.length === 0 && allCheck.newCards.length === 0) {
           setHasWords(false);
@@ -108,21 +111,22 @@ export default function ReviewPage() {
         status: deriveCardStatus(result.repetition, result.interval),
       };
 
-      await upsertCardState(updatedCard);
-
-      await addReviewLog({
-        id: nanoid(),
-        wordId: word.id,
-        quality,
-        reviewDate: new Date().toISOString(),
-        previousInterval: cardState.interval,
-        newInterval: result.interval,
-        previousEF: cardState.easeFactor,
-        newEF: result.easeFactor,
-        mode: 'review',
-      });
-
-      updateStreak();
+      // Run API calls in parallel; streak is fire-and-forget
+      await Promise.all([
+        upsertCardState(updatedCard),
+        addReviewLog({
+          id: nanoid(),
+          wordId: word.id,
+          quality,
+          reviewDate: new Date().toISOString(),
+          previousInterval: cardState.interval,
+          newInterval: result.interval,
+          previousEF: cardState.easeFactor,
+          newEF: result.easeFactor,
+          mode: 'review',
+        }),
+      ]);
+      updateStreak().catch(() => {});
 
       if (quality < 3) {
         setQueue((prev) => [
@@ -137,7 +141,7 @@ export default function ReviewPage() {
         incorrect: quality < 3 ? prev.incorrect + 1 : prev.incorrect,
       }));
 
-      // Flip back first, then advance after animation completes
+      // Fade out then advance
       setIsTransitioning(true);
       setIsFlipped(false);
 
@@ -148,7 +152,7 @@ export default function ReviewPage() {
           setCurrentIndex((prev) => prev + 1);
         }
         setIsTransitioning(false);
-      }, 500);
+      }, 350);
     },
     [currentCard, currentIndex, queue.length, isTransitioning]
   );
@@ -176,7 +180,6 @@ export default function ReviewPage() {
 
   if (isComplete) {
     if (!hasWords && sessionStats.reviewed === 0) {
-      // No words at all — guide user to add words
       return (
         <div className="review-page">
           <div className="review-empty">
@@ -194,7 +197,6 @@ export default function ReviewPage() {
       );
     }
 
-    // Session complete — show stats
     return (
       <div className="review-page">
         <div className="review-complete">
@@ -259,8 +261,8 @@ export default function ReviewPage() {
       </div>
 
       <div className="flashcard-container" onClick={handleFlip}>
-        <div className={`flashcard ${isFlipped ? 'flipped' : ''}`}>
-          <div className="flashcard-front">
+        <div className="flashcard">
+          <div className={`flashcard-front ${isFlipped ? 'hidden' : ''}`}>
             <div className="flashcard-word-row">
               <div className="flashcard-word">{currentCard.word.word}</div>
               <AudioButton audioFile={currentCard.word.audio} size="large" />
@@ -270,9 +272,9 @@ export default function ReviewPage() {
                 {currentCard.word.phonetic}
               </div>
             )}
-            <div className="flip-hint">点击翻转</div>
+            <div className="flip-hint">点击查看释义</div>
           </div>
-          <div className="flashcard-back">
+          <div className={`flashcard-back ${isFlipped ? '' : 'hidden'}`}>
             <div className="flashcard-word-row">
               <div className="flashcard-word-small">
                 {currentCard.word.word}

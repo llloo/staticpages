@@ -1,0 +1,46 @@
+[
+  {
+    "word": "abandon",
+    "phonetic": "/əˈbændən/",
+    "definitions": [
+      { "pos": "v.", "meaning": "放弃；抛弃" },
+      { "pos": "n.", "meaning": "放纵；放任" }
+    ],
+    "example": "He abandoned his plan to travel abroad."
+  },
+  {
+    "word": "absorb",
+    "phonetic": "/əbˈzɔːrb/",
+    "definitions": [
+      { "pos": "v.", "meaning": "吸收；吸引；使全神贯注" }
+    ],
+    "example": "The sponge can absorb a lot of water."
+  },
+  {
+    "word": "academic",
+    "phonetic": "/ˌækəˈdemɪk/",
+    "definitions": [
+      { "pos": "adj.", "meaning": "学术的；学院的" },
+      { "pos": "n.", "meaning": "大学教师；学者" }
+    ],
+    "example": "She has an excellent academic record."
+  },
+  {
+    "word": "budget",
+    "phonetic": "/ˈbʌdʒɪt/",
+    "definitions": [
+      { "pos": "n.", "meaning": "预算" },
+      { "pos": "v.", "meaning": "编预算；安排" }
+    ],
+    "example": "We need to stick to a tight budget this month."
+  },
+  {
+    "word": "campaign",
+    "phonetic": "/kæmˈpeɪn/",
+    "definitions": [
+      { "pos": "n.", "meaning": "运动；战役" },
+      { "pos": "v.", "meaning": "参加竞选；从事运动" }
+    ],
+    "example": "The government launched a campaign against smoking."
+  }
+]

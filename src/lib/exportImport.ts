@@ -1,5 +1,6 @@
 import type { UserSettings, StreakData } from '../types';
-import { STORAGE_KEYS, DEFAULT_SETTINGS } from '../constants';
+import { DEFAULT_SETTINGS } from '../constants';
+import { supabase } from './supabase';
 import {
   getAllWords,
   getAllCardStates,
@@ -12,24 +13,64 @@ import {
   clearAllData,
 } from './storage';
 
-export function loadSettings(): UserSettings {
+async function getUserId(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('未登录');
+  return session.user.id;
+}
+
+export async function loadSettings(): Promise<UserSettings> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.settings);
-    if (raw) return JSON.parse(raw);
+    const userId = await getUserId();
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) {
+      return {
+        dailyNewCardLimit: data.daily_new_card_limit,
+        dailyReviewLimit: data.daily_review_limit,
+        enabledListIds: data.enabled_list_ids ?? [],
+      };
+    }
   } catch {
     // ignore
   }
   return { ...DEFAULT_SETTINGS };
 }
 
-export function saveSettings(settings: UserSettings): void {
-  localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(settings));
+export async function saveSettings(settings: UserSettings): Promise<void> {
+  const userId = await getUserId();
+  const { error } = await supabase.from('user_settings').upsert({
+    user_id: userId,
+    daily_new_card_limit: settings.dailyNewCardLimit,
+    daily_review_limit: settings.dailyReviewLimit,
+    enabled_list_ids: settings.enabledListIds,
+  });
+  if (error) throw error;
 }
 
-export function loadStreak(): StreakData {
+export async function loadStreak(): Promise<StreakData> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.streak);
-    if (raw) return JSON.parse(raw);
+    const userId = await getUserId();
+    const { data, error } = await supabase
+      .from('streak_data')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) {
+      return {
+        currentStreak: data.current_streak,
+        longestStreak: data.longest_streak,
+        lastActiveDate: data.last_active_date ?? '',
+        activeDates: data.active_dates ?? [],
+      };
+    }
   } catch {
     // ignore
   }
@@ -41,12 +82,20 @@ export function loadStreak(): StreakData {
   };
 }
 
-export function saveStreak(streak: StreakData): void {
-  localStorage.setItem(STORAGE_KEYS.streak, JSON.stringify(streak));
+export async function saveStreak(streak: StreakData): Promise<void> {
+  const userId = await getUserId();
+  const { error } = await supabase.from('streak_data').upsert({
+    user_id: userId,
+    current_streak: streak.currentStreak,
+    longest_streak: streak.longestStreak,
+    last_active_date: streak.lastActiveDate || null,
+    active_dates: streak.activeDates,
+  });
+  if (error) throw error;
 }
 
-export function updateStreak(): StreakData {
-  const streak = loadStreak();
+export async function updateStreak(): Promise<StreakData> {
+  const streak = await loadStreak();
   const today = new Date().toISOString().split('T')[0];
 
   if (streak.lastActiveDate === today) return streak;
@@ -72,7 +121,7 @@ export function updateStreak(): StreakData {
     }
   }
 
-  saveStreak(streak);
+  await saveStreak(streak);
   return streak;
 }
 
@@ -96,8 +145,8 @@ export async function exportAllData(): Promise<string> {
     cardStates: await getAllCardStates(),
     reviewLogs: await getAllReviewLogs(),
     quizResults: await getAllQuizResults(),
-    settings: loadSettings(),
-    streak: loadStreak(),
+    settings: await loadSettings(),
+    streak: await loadStreak(),
   };
   return JSON.stringify(data, null, 2);
 }
@@ -123,6 +172,6 @@ export async function importData(jsonString: string): Promise<void> {
   for (const log of data.reviewLogs) await addReviewLog(log);
   for (const quiz of data.quizResults) await addQuizResult(quiz);
 
-  if (data.settings) saveSettings(data.settings);
-  if (data.streak) saveStreak(data.streak);
+  if (data.settings) await saveSettings(data.settings);
+  if (data.streak) await saveStreak(data.streak);
 }

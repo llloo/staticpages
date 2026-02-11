@@ -65,7 +65,6 @@ export interface WordListMeta {
   name: string;
   description: string;
   wordCount: number;
-  filename: string;
 }
 
 export interface RawWordEntry {

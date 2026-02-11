@@ -68,7 +68,7 @@ export default function StatsPage() {
     async function load() {
       const allLogs = await getAllReviewLogs();
       const allCards = await getAllCardStates();
-      const streakData = loadStreak();
+      const streakData = await loadStreak();
 
       // Daily counts for last 30 days
       const now = new Date();

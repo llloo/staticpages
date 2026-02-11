@@ -111,7 +111,7 @@ export default function QuizPage() {
         mode: 'quiz',
       });
     }
-    updateStreak();
+    await updateStreak();
   };
 
   const handleMCQSelect = async (answer: string) => {

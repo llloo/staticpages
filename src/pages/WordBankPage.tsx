@@ -8,9 +8,9 @@ import {
   deleteWord,
   deleteWordsByListId,
 } from '../lib/storage';
+import { getWordListsMeta, getWordListById } from '../lib/adminStorage';
 import { createInitialCardState } from '../lib/sm2';
 import { loadSettings, saveSettings } from '../lib/exportImport';
-import type { RawWordEntry } from '../types';
 import AudioButton from '../components/AudioButton';
 import './WordBankPage.css';
 
@@ -29,15 +29,18 @@ export default function WordBankPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(
-          `${import.meta.env.BASE_URL}data/manifest.json`
-        );
-        const data: WordListMeta[] = await res.json();
-        setManifest(data);
+        const lists = await getWordListsMeta();
+        const metaList: WordListMeta[] = lists.map((l) => ({
+          id: l.id,
+          name: l.name,
+          description: l.description,
+          wordCount: l.wordCount,
+        }));
+        setManifest(metaList);
       } catch {
-        // No manifest available
+        // Failed to load word lists
       }
-      const settings = loadSettings();
+      const settings = await loadSettings();
       setEnabledIds(settings.enabledListIds);
       const words = await getAllUserWords();
       setUserWords(words);
@@ -52,8 +55,8 @@ export default function WordBankPage() {
       await deleteWordsByListId(listId);
       const newEnabled = enabledIds.filter((id) => id !== listId);
       setEnabledIds(newEnabled);
-      const settings = loadSettings();
-      saveSettings({ ...settings, enabledListIds: newEnabled });
+      const settings = await loadSettings();
+      await saveSettings({ ...settings, enabledListIds: newEnabled });
     } else {
       // Enable
       setLoadingList(listId);
@@ -61,10 +64,9 @@ export default function WordBankPage() {
       if (!meta) return;
 
       try {
-        const res = await fetch(
-          `${import.meta.env.BASE_URL}data/${meta.filename}`
-        );
-        const rawWords: RawWordEntry[] = await res.json();
+        const wordList = await getWordListById(listId);
+        if (!wordList) return;
+        const rawWords = wordList.words;
         const words: Word[] = rawWords.map((w, i) => ({
           id: `${listId}:${i}`,
           word: w.word,
@@ -83,8 +85,8 @@ export default function WordBankPage() {
 
         const newEnabled = [...enabledIds, listId];
         setEnabledIds(newEnabled);
-        const settings = loadSettings();
-        saveSettings({ ...settings, enabledListIds: newEnabled });
+        const settings = await loadSettings();
+        await saveSettings({ ...settings, enabledListIds: newEnabled });
       } catch (err) {
         console.error('Failed to load word list:', err);
       }
