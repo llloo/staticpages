@@ -342,3 +342,23 @@ export async function disableWordList(listId: string): Promise<void> {
   });
   if (error) throw error;
 }
+
+// ============= Enabled Word Filtering =============
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export async function getEnabledWordIds(enabledListIds: string[]): Promise<Set<string>> {
+  const userId = await getUserId();
+  const conditions = ['source.eq.user'];
+  if (enabledListIds.length > 0) {
+    conditions.push(`list_id.in.(${enabledListIds.join(',')})`);
+  }
+  const { data, error } = await supabase
+    .from('words')
+    .select('id')
+    .eq('user_id', userId)
+    .or(conditions.join(','));
+
+  if (error) throw error;
+  return new Set((data ?? []).map((row: any) => row.id as string));
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */

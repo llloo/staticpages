@@ -17,7 +17,7 @@ import {
   addReviewLog,
   addQuizResult,
 } from '../lib/storage';
-import { updateStreak } from '../lib/exportImport';
+import { updateStreak, loadSettings } from '../lib/exportImport';
 import type { CardState } from '../types';
 import AudioButton from '../components/AudioButton';
 import './QuizPage.css';
@@ -51,8 +51,11 @@ export default function QuizPage() {
     setSpellingInput('');
     setShowResult(false);
 
+    const settings = await loadSettings();
+    const listIds = settings.enabledListIds;
+
     if (quizMode === 'mcq') {
-      const questions = await generateMCQQuestions(10);
+      const questions = await generateMCQQuestions(10, listIds);
       if (questions.length === 0) {
         setNoWords(true);
       } else {
@@ -60,7 +63,7 @@ export default function QuizPage() {
         setNoWords(false);
       }
     } else {
-      const questions = await generateSpellingQuestions(10);
+      const questions = await generateSpellingQuestions(10, listIds);
       if (questions.length === 0) {
         setNoWords(true);
       } else {

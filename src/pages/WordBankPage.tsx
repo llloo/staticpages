@@ -49,7 +49,6 @@ export default function WordBankPage() {
 
   const toggleList = async (listId: string) => {
     if (enabledIds.includes(listId)) {
-      if (!confirm('禁用词库将清除该词库的学习进度，确定要禁用吗？')) return;
       try {
         await disableWordList(listId);
         setEnabledIds((prev) => prev.filter((id) => id !== listId));
@@ -120,9 +119,9 @@ export default function WordBankPage() {
                 </div>
               </div>
               <button
-                className={`btn ${
+                className={`btn btn-sm ${
                   enabledIds.includes(meta.id)
-                    ? 'btn-outline'
+                    ? 'btn-outline btn-danger-text'
                     : 'btn-primary'
                 }`}
                 onClick={() => toggleList(meta.id)}
@@ -131,7 +130,7 @@ export default function WordBankPage() {
                 {loadingList === meta.id
                   ? '加载中...'
                   : enabledIds.includes(meta.id)
-                    ? '已启用'
+                    ? '禁用'
                     : '启用'}
               </button>
             </div>
