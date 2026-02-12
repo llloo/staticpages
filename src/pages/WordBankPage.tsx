@@ -3,14 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import type { WordListMeta, Word } from '../types';
 import {
   getAllUserWords,
-  addWords,
-  batchUpsertCardStates,
   deleteWord,
-  deleteWordsByListId,
+  enableWordList,
+  disableWordList,
 } from '../lib/storage';
-import { getWordListsMeta, getWordListById } from '../lib/adminStorage';
-import { createInitialCardState } from '../lib/sm2';
-import { loadSettings, saveSettings } from '../lib/exportImport';
+import { getWordListsMeta } from '../lib/adminStorage';
+import { loadSettings } from '../lib/exportImport';
 import AudioButton from '../components/AudioButton';
 import './WordBankPage.css';
 
@@ -51,45 +49,23 @@ export default function WordBankPage() {
 
   const toggleList = async (listId: string) => {
     if (enabledIds.includes(listId)) {
-      // Disable
-      await deleteWordsByListId(listId);
-      const newEnabled = enabledIds.filter((id) => id !== listId);
-      setEnabledIds(newEnabled);
-      const settings = await loadSettings();
-      await saveSettings({ ...settings, enabledListIds: newEnabled });
+      if (!confirm('禁用词库将清除该词库的学习进度，确定要禁用吗？')) return;
+      try {
+        await disableWordList(listId);
+        setEnabledIds((prev) => prev.filter((id) => id !== listId));
+      } catch (err) {
+        console.error('Failed to disable word list:', err);
+      }
     } else {
-      // Enable
       setLoadingList(listId);
       const meta = manifest.find((m) => m.id === listId);
       if (!meta) return;
 
       try {
-        const wordList = await getWordListById(listId);
-        if (!wordList) return;
-        const rawWords = wordList.words;
-        const words: Word[] = rawWords.map((w, i) => ({
-          id: `${listId}:${i}`,
-          word: w.word,
-          phonetic: w.phonetic,
-          audio: w.audio,
-          definitions: w.definitions,
-          example: w.example,
-          example_cn: w.example_cn,
-          tags: [meta.name],
-          source: 'builtin' as const,
-          listId,
-        }));
-
-        await addWords(words);
-        const cardStates = words.map((w) => createInitialCardState(w.id));
-        await batchUpsertCardStates(cardStates);
-
-        const newEnabled = [...enabledIds, listId];
-        setEnabledIds(newEnabled);
-        const settings = await loadSettings();
-        await saveSettings({ ...settings, enabledListIds: newEnabled });
+        await enableWordList(listId, meta.name);
+        setEnabledIds((prev) => [...prev, listId]);
       } catch (err) {
-        console.error('Failed to load word list:', err);
+        console.error('Failed to enable word list:', err);
       }
       setLoadingList(null);
     }

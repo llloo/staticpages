@@ -7,7 +7,7 @@ import {
   deriveCardStatus,
   calculateDueDate,
 } from '../lib/sm2';
-import { getWordsByIds, upsertCardState, addReviewLog } from '../lib/storage';
+import { getWordsByIds, upsertCardState, addReviewLog, getAllCardStates } from '../lib/storage';
 import { loadSettings, updateStreak } from '../lib/exportImport';
 import type { CardState, Word } from '../types';
 import AudioButton from '../components/AudioButton';
@@ -38,6 +38,7 @@ export default function ReviewPage() {
   });
   const [isComplete, setIsComplete] = useState(false);
   const [hasWords, setHasWords] = useState(true);
+  const [allMastered, setAllMastered] = useState(false);
   const [loading, setLoading] = useState(true);
   const transitionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -64,9 +65,11 @@ export default function ReviewPage() {
 
       setQueue(reviewQueue);
       if (reviewQueue.length === 0) {
-        const allCheck = await getDueCards(9999, 9999);
-        if (allCheck.reviewCards.length === 0 && allCheck.newCards.length === 0) {
+        const allStates = await getAllCardStates();
+        if (allStates.length === 0) {
           setHasWords(false);
+        } else if (allStates.every((c) => c.status === 'mastered')) {
+          setAllMastered(true);
         }
         setIsComplete(true);
       }
@@ -186,6 +189,24 @@ export default function ReviewPage() {
             <div className="empty-icon">📚</div>
             <h2>还没有单词</h2>
             <p className="empty-desc">先去词库添加或启用单词吧</p>
+            <button
+              className="btn btn-primary btn-lg"
+              onClick={() => navigate('/words')}
+            >
+              管理词库
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (allMastered && sessionStats.reviewed === 0) {
+      return (
+        <div className="review-page">
+          <div className="review-complete">
+            <div className="complete-icon">&#127942;</div>
+            <h2>全部掌握！</h2>
+            <p className="empty-desc">当前词库的所有单词都已掌握，去添加更多单词吧</p>
             <button
               className="btn btn-primary btn-lg"
               onClick={() => navigate('/words')}

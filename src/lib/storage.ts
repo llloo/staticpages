@@ -325,3 +325,20 @@ export async function clearAllData(): Promise<void> {
     supabase.from('streak_data').delete().eq('user_id', userId),
   ]);
 }
+
+// ============= Word List Enable/Disable (RPC) =============
+
+export async function enableWordList(listId: string, listName: string): Promise<void> {
+  const { error } = await supabase.rpc('enable_word_list', {
+    p_list_id: listId,
+    p_list_name: listName,
+  });
+  if (error) throw error;
+}
+
+export async function disableWordList(listId: string): Promise<void> {
+  const { error } = await supabase.rpc('disable_word_list', {
+    p_list_id: listId,
+  });
+  if (error) throw error;
+}
