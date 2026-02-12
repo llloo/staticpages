@@ -3,11 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { getDueCards } from '../lib/scheduler';
 import {
+  generateMCQFromWords,
+  type MCQQuestion,
+} from '../lib/quizGenerator';
+import {
   calculateNextReview,
   deriveCardStatus,
   calculateDueDate,
 } from '../lib/sm2';
-import { getWordsByIds, upsertCardState, addReviewLog, getAllCardStates, getEnabledWordIds } from '../lib/storage';
+import { getWordsByIds, upsertCardState, addReviewLog, getAllCardStates, getEnabledWordIds, getCardState, addQuizResult } from '../lib/storage';
 import { loadSettings, updateStreak } from '../lib/exportImport';
 import type { CardState, Word } from '../types';
 import AudioButton from '../components/AudioButton';
@@ -40,10 +44,18 @@ export default function ReviewPage() {
   const [hasWords, setHasWords] = useState(true);
   const [allMastered, setAllMastered] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [sessionPhase, setSessionPhase] = useState<'learning' | 'reinforcing'>('learning');
+  const [sessionPhase, setSessionPhase] = useState<'learning' | 'reinforcing' | 'quizzing'>('learning');
   const sessionWordsRef = useRef<Map<string, ReviewCard>>(new Map());
   const sessionQualitiesRef = useRef<Map<string, number>>(new Map());
   const [reinforceStats, setReinforceStats] = useState({ reviewed: 0, correct: 0, incorrect: 0 });
+  const [quizQuestions, setQuizQuestions] = useState<MCQQuestion[]>([]);
+  const [quizIndex, setQuizIndex] = useState(0);
+  const [quizSelected, setQuizSelected] = useState<string | null>(null);
+  const [quizShowResult, setQuizShowResult] = useState(false);
+  const [quizCorrect, setQuizCorrect] = useState(0);
+  const [quizTotal, setQuizTotal] = useState(0);
+  const quizStartTime = useRef(0);
+  const quizWrongIdsRef = useRef<string[]>([]);
   const transitionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
@@ -227,6 +239,89 @@ export default function ReviewPage() {
     setReinforceStats({ reviewed: 0, correct: 0, incorrect: 0 });
   }, []);
 
+  const canQuiz = sessionWordsRef.current.size >= 4;
+
+  const startQuiz = useCallback(() => {
+    const words = Array.from(sessionWordsRef.current.values()).map((r) => r.word);
+    const questions = generateMCQFromWords(words, Math.min(words.length, 10));
+    if (questions.length === 0) return;
+
+    setQuizQuestions(questions);
+    setQuizIndex(0);
+    setQuizSelected(null);
+    setQuizShowResult(false);
+    setQuizCorrect(0);
+    setQuizTotal(questions.length);
+    quizStartTime.current = Date.now();
+    quizWrongIdsRef.current = [];
+    setSessionPhase('quizzing');
+    setIsComplete(false);
+  }, []);
+
+  const recordQuizAnswer = useCallback(async (wordId: string, isCorrect: boolean) => {
+    const quality = isCorrect ? 4 : 1;
+    const card = await getCardState(wordId);
+    if (card) {
+      const result = calculateNextReview(quality, card.repetition, card.easeFactor, card.interval);
+      const updatedCard: CardState = {
+        ...card,
+        easeFactor: result.easeFactor,
+        interval: result.interval,
+        repetition: result.repetition,
+        dueDate: calculateDueDate(result.interval),
+        lastReviewDate: new Date().toISOString().split('T')[0],
+        status: deriveCardStatus(result.repetition, result.interval),
+      };
+      await upsertCardState(updatedCard);
+      await addReviewLog({
+        id: nanoid(),
+        wordId,
+        quality,
+        reviewDate: new Date().toISOString(),
+        previousInterval: card.interval,
+        newInterval: result.interval,
+        previousEF: card.easeFactor,
+        newEF: result.easeFactor,
+        mode: 'quiz',
+      });
+    }
+    updateStreak().catch(() => {});
+  }, []);
+
+  const handleQuizSelect = useCallback(async (answer: string) => {
+    if (quizShowResult) return;
+    setQuizSelected(answer);
+    setQuizShowResult(true);
+    const q = quizQuestions[quizIndex];
+    const isCorrect = answer === q.correctAnswer;
+    if (isCorrect) {
+      setQuizCorrect((c) => c + 1);
+    } else {
+      quizWrongIdsRef.current.push(q.wordId);
+    }
+    await recordQuizAnswer(q.wordId, isCorrect);
+  }, [quizShowResult, quizQuestions, quizIndex, recordQuizAnswer]);
+
+  const handleQuizNext = useCallback(async () => {
+    if (quizIndex + 1 >= quizTotal) {
+      const duration = Math.round((Date.now() - quizStartTime.current) / 1000);
+      await addQuizResult({
+        id: nanoid(),
+        date: new Date().toISOString(),
+        mode: 'mcq',
+        totalQuestions: quizTotal,
+        correctCount: quizCorrect,
+        wrongWordIds: quizWrongIdsRef.current,
+        durationSeconds: duration,
+      });
+      setIsComplete(true);
+    } else {
+      setQuizIndex((i) => i + 1);
+      setQuizSelected(null);
+      setQuizShowResult(false);
+    }
+  }, [quizIndex, quizTotal, quizCorrect]);
+
   if (loading) {
     return <div className="review-page"><div className="loading-text">加载中...</div></div>;
   }
@@ -268,8 +363,48 @@ export default function ReviewPage() {
       );
     }
 
-    const stats = sessionPhase === 'reinforcing' ? reinforceStats : sessionStats;
+    const isQuizzing = sessionPhase === 'quizzing';
     const isReinforcing = sessionPhase === 'reinforcing';
+    const stats = isReinforcing ? reinforceStats : sessionStats;
+
+    if (isQuizzing) {
+      return (
+        <div className="review-page">
+          <div className="review-complete">
+            <div className="complete-icon">&#10003;</div>
+            <h2>测验完成</h2>
+            <div className="complete-stats">
+              <div className="complete-stat">
+                <span className="complete-stat-number correct">{quizCorrect}</span>
+                <span className="complete-stat-label">正确</span>
+              </div>
+              <div className="complete-stat">
+                <span className="complete-stat-number incorrect">{quizTotal - quizCorrect}</span>
+                <span className="complete-stat-label">错误</span>
+              </div>
+            </div>
+            {quizTotal > 0 && (
+              <div className="complete-accuracy">
+                正确率 {Math.round((quizCorrect / quizTotal) * 100)}%
+              </div>
+            )}
+            <div className="complete-actions">
+              <div className="complete-actions-row">
+                <button className="btn btn-primary btn-lg" onClick={startReinforcement}>
+                  巩固复习
+                </button>
+                <button className="btn btn-outline btn-lg" onClick={startQuiz}>
+                  再测一轮
+                </button>
+              </div>
+              <button className="btn-secondary-link" onClick={() => window.location.reload()}>
+                学习新词
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="review-page">
@@ -306,12 +441,22 @@ export default function ReviewPage() {
             </div>
           )}
           <div className="complete-actions">
-            <button
-              className="btn btn-primary btn-lg"
-              onClick={startReinforcement}
-            >
-              {isReinforcing ? '再巩固一轮' : '巩固复习'}
-            </button>
+            <div className="complete-actions-row">
+              <button
+                className="btn btn-primary btn-lg"
+                onClick={startReinforcement}
+              >
+                {isReinforcing ? '再巩固一轮' : '巩固复习'}
+              </button>
+              {canQuiz && (
+                <button
+                  className="btn btn-outline btn-lg"
+                  onClick={startQuiz}
+                >
+                  快速测验
+                </button>
+              )}
+            </div>
             <button
               className="btn-secondary-link"
               onClick={() => window.location.reload()}
@@ -319,6 +464,60 @@ export default function ReviewPage() {
               学习新词
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionPhase === 'quizzing' && !isComplete) {
+    const q = quizQuestions[quizIndex];
+    if (!q) return null;
+    return (
+      <div className="review-page">
+        <div className="review-progress">
+          <div className="progress-text">
+            <span className="phase-badge">快速测验</span>
+            {quizIndex + 1} / {quizTotal}
+          </div>
+          <div className="progress-bar">
+            <div
+              className="progress-fill"
+              style={{ width: `${((quizIndex + 1) / quizTotal) * 100}%` }}
+            />
+          </div>
+        </div>
+        <div className="inline-quiz">
+          <div className="inline-quiz-question">
+            <div className="flashcard-word-row">
+              <div className="flashcard-word">{q.questionText}</div>
+              <AudioButton audioFile={q.audio} size="large" />
+            </div>
+            {q.phonetic && <div className="flashcard-phonetic">{q.phonetic}</div>}
+          </div>
+          <div className="inline-quiz-options">
+            {q.options.map((option, i) => {
+              let cls = 'inline-quiz-option';
+              if (quizShowResult) {
+                if (option === q.correctAnswer) cls += ' correct';
+                else if (option === quizSelected) cls += ' wrong';
+              }
+              return (
+                <button
+                  key={i}
+                  className={cls}
+                  onClick={() => handleQuizSelect(option)}
+                  disabled={quizShowResult}
+                >
+                  {option}
+                </button>
+              );
+            })}
+          </div>
+          {quizShowResult && (
+            <button className="btn btn-primary btn-block" onClick={handleQuizNext}>
+              {quizIndex + 1 >= quizTotal ? '查看结果' : '下一题'}
+            </button>
+          )}
         </div>
       </div>
     );
