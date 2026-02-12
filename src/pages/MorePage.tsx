@@ -1,5 +1,11 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../hooks/useAdmin';
+import { useAuth } from '../hooks/useAuth';
+import type { WordListMeta } from '../types';
+import { disableWordList } from '../lib/storage';
+import { getWordListsMeta } from '../lib/adminStorage';
+import { loadSettings } from '../lib/exportImport';
 import './MorePage.css';
 
 const menuItems = [
@@ -28,7 +34,7 @@ const menuItems = [
   },
   {
     label: '设置',
-    desc: '每日限额与账号管理',
+    desc: '每日学习限额',
     path: '/settings',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -42,6 +48,48 @@ const menuItems = [
 export default function MorePage() {
   const navigate = useNavigate();
   const { isAdmin } = useAdmin();
+  const { user, signOut } = useAuth();
+  const [enabledIds, setEnabledIds] = useState<string[]>([]);
+  const [manifest, setManifest] = useState<WordListMeta[]>([]);
+  const [disablingId, setDisablingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      const settings = await loadSettings();
+      setEnabledIds(settings.enabledListIds);
+      try {
+        const lists = await getWordListsMeta();
+        setManifest(lists.map((l) => ({
+          id: l.id,
+          name: l.name,
+          description: l.description,
+          wordCount: l.wordCount,
+        })));
+      } catch {
+        // ignore
+      }
+    }
+    load();
+  }, []);
+
+  const handleDisable = async (listId: string) => {
+    if (!confirm('禁用词库将清除该词库的学习进度，确定要禁用吗？')) return;
+    setDisablingId(listId);
+    try {
+      await disableWordList(listId);
+      setEnabledIds((prev) => prev.filter((id) => id !== listId));
+    } catch (err) {
+      console.error('Failed to disable word list:', err);
+    }
+    setDisablingId(null);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
+  const enabledLists = manifest.filter((m) => enabledIds.includes(m.id));
 
   const allItems = isAdmin
     ? [
@@ -61,6 +109,55 @@ export default function MorePage() {
 
   return (
     <div className="more-page">
+      <div className="more-user-section card">
+        <div className="more-user-info">
+          <div className="more-user-avatar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </div>
+          <div className="more-user-detail">
+            <span className="more-user-email">{user?.email ?? '未登录'}</span>
+            <span className="more-user-hint text-secondary">数据已同步至云端</span>
+          </div>
+        </div>
+        <button className="btn btn-outline btn-sm" onClick={handleSignOut}>
+          退出
+        </button>
+      </div>
+
+      {enabledLists.length > 0 && (
+        <div className="more-enabled-section">
+          <div className="more-section-header">
+            <span className="more-section-title">已启用词库</span>
+            <button
+              className="more-section-link"
+              onClick={() => navigate('/words')}
+            >
+              管理词库
+            </button>
+          </div>
+          <div className="more-enabled-list">
+            {enabledLists.map((meta) => (
+              <div key={meta.id} className="more-enabled-item card">
+                <div className="more-enabled-info">
+                  <span className="more-enabled-name">{meta.name}</span>
+                  <span className="more-enabled-count text-secondary">{meta.wordCount} 词</span>
+                </div>
+                <button
+                  className="btn btn-outline btn-sm btn-danger-text"
+                  onClick={() => handleDisable(meta.id)}
+                  disabled={disablingId === meta.id}
+                >
+                  {disablingId === meta.id ? '禁用中...' : '禁用'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="more-list">
         {allItems.map((item) => (
           <button

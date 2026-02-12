@@ -1,17 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   loadSettings,
   saveSettings,
 } from '../lib/exportImport';
-import { useAuth } from '../hooks/useAuth';
 import { DEFAULT_SETTINGS } from '../constants';
 import type { UserSettings } from '../types';
 import './SettingsPage.css';
 
 export default function SettingsPage() {
-  const { signOut } = useAuth();
-  const navigate = useNavigate();
   const [settings, setSettings] = useState<UserSettings>({ ...DEFAULT_SETTINGS });
   const [loading, setLoading] = useState(true);
 
@@ -32,11 +28,6 @@ export default function SettingsPage() {
     const updated = { ...settings, dailyReviewLimit: value };
     setSettings(updated);
     await saveSettings(updated);
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
   };
 
   if (loading) {
@@ -83,19 +74,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="settings-section card">
-        <h3>账号</h3>
-        <button
-          className="btn btn-outline btn-block"
-          onClick={handleSignOut}
-        >
-          退出登录
-        </button>
-      </div>
-
       <div className="settings-footer text-secondary">
         <p>词忆 - 智能背单词应用</p>
-        <p>数据已同步至云端</p>
       </div>
     </div>
   );
