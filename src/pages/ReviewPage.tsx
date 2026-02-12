@@ -7,7 +7,7 @@ import {
   deriveCardStatus,
   calculateDueDate,
 } from '../lib/sm2';
-import { getWordsByIds, upsertCardState, addReviewLog, getAllCardStates } from '../lib/storage';
+import { getWordsByIds, upsertCardState, addReviewLog, getAllCardStates, getEnabledWordIds } from '../lib/storage';
 import { loadSettings, updateStreak } from '../lib/exportImport';
 import type { CardState, Word } from '../types';
 import AudioButton from '../components/AudioButton';
@@ -47,7 +47,8 @@ export default function ReviewPage() {
       const settings = await loadSettings();
       const { reviewCards, newCards } = await getDueCards(
         settings.dailyNewCardLimit,
-        settings.dailyReviewLimit
+        settings.dailyReviewLimit,
+        settings.enabledListIds
       );
       const allCards = [...reviewCards, ...newCards];
 
@@ -65,10 +66,13 @@ export default function ReviewPage() {
 
       setQueue(reviewQueue);
       if (reviewQueue.length === 0) {
-        const allStates = await getAllCardStates();
-        if (allStates.length === 0) {
+        const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
+        const enabledStates = (await getAllCardStates()).filter((c) =>
+          enabledWordIds.has(c.wordId)
+        );
+        if (enabledStates.length === 0) {
           setHasWords(false);
-        } else if (allStates.every((c) => c.status === 'mastered')) {
+        } else if (enabledStates.every((c) => c.status === 'mastered')) {
           setAllMastered(true);
         }
         setIsComplete(true);

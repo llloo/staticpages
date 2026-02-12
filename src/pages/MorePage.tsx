@@ -73,7 +73,6 @@ export default function MorePage() {
   }, []);
 
   const handleDisable = async (listId: string) => {
-    if (!confirm('禁用词库将清除该词库的学习进度，确定要禁用吗？')) return;
     setDisablingId(listId);
     try {
       await disableWordList(listId);

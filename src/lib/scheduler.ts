@@ -1,5 +1,5 @@
 import type { CardState } from '../types';
-import { getAllCardStates } from './storage';
+import { getAllCardStates, getEnabledWordIds } from './storage';
 
 export interface ScheduledQueue {
   reviewCards: CardState[];
@@ -8,10 +8,14 @@ export interface ScheduledQueue {
 
 export async function getDueCards(
   dailyNewLimit: number,
-  dailyReviewLimit: number
+  dailyReviewLimit: number,
+  enabledListIds: string[]
 ): Promise<ScheduledQueue> {
   const today = new Date().toISOString().split('T')[0];
-  const allCards = await getAllCardStates();
+  const enabledWordIds = await getEnabledWordIds(enabledListIds);
+  const allCards = (await getAllCardStates()).filter((c) =>
+    enabledWordIds.has(c.wordId)
+  );
 
   const reviewCards = allCards
     .filter((c) => c.dueDate <= today && c.status !== 'new')

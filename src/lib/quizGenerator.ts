@@ -1,5 +1,5 @@
 import type { Word } from '../types';
-import { getAllCardStates, getAllWords } from './storage';
+import { getAllCardStates, getAllWords, getEnabledWordIds } from './storage';
 
 export interface MCQQuestion {
   type: 'mcq';
@@ -29,8 +29,11 @@ function shuffle<T>(arr: T[]): T[] {
   return result;
 }
 
-async function getStudiedWords(): Promise<Word[]> {
-  const allCards = await getAllCardStates();
+async function getStudiedWords(enabledListIds: string[]): Promise<Word[]> {
+  const enabledWordIds = await getEnabledWordIds(enabledListIds);
+  const allCards = (await getAllCardStates()).filter((c) =>
+    enabledWordIds.has(c.wordId)
+  );
   const studiedIds = new Set(
     allCards.filter((c) => c.status !== 'new').map((c) => c.wordId)
   );
@@ -39,9 +42,10 @@ async function getStudiedWords(): Promise<Word[]> {
 }
 
 export async function generateMCQQuestions(
-  count: number
+  count: number,
+  enabledListIds: string[]
 ): Promise<MCQQuestion[]> {
-  const studiedWords = await getStudiedWords();
+  const studiedWords = await getStudiedWords(enabledListIds);
   if (studiedWords.length < 4) return [];
 
   const selected = shuffle(studiedWords).slice(0, count);
@@ -70,9 +74,10 @@ export async function generateMCQQuestions(
 }
 
 export async function generateSpellingQuestions(
-  count: number
+  count: number,
+  enabledListIds: string[]
 ): Promise<SpellingQuestion[]> {
-  const studiedWords = await getStudiedWords();
+  const studiedWords = await getStudiedWords(enabledListIds);
   if (studiedWords.length === 0) return [];
 
   const selected = shuffle(studiedWords).slice(0, count);
