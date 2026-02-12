@@ -148,6 +148,13 @@
   text-align: center;
 }
 
+.flashcard-example-cn {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
 /* Rating buttons */
 .rating-buttons {
   display: flex;
