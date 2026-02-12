@@ -74,6 +74,7 @@ export default function WordBankPage() {
           audio: w.audio,
           definitions: w.definitions,
           example: w.example,
+          example_cn: w.example_cn,
           tags: [meta.name],
           source: 'builtin' as const,
           listId,

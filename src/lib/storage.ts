@@ -74,6 +74,8 @@ function toQuizResult(row: any): QuizResult {
 
 // ============= Words =============
 
+const BATCH_SIZE = 50;
+
 export async function addWords(words: Word[]): Promise<void> {
   const userId = await getUserId();
   const rows = words.map((w) => ({
@@ -90,8 +92,11 @@ export async function addWords(words: Word[]): Promise<void> {
     list_id: w.listId ?? null,
   }));
 
-  const { error } = await supabase.from('words').upsert(rows);
-  if (error) throw error;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase.from('words').upsert(batch);
+    if (error) throw error;
+  }
 }
 
 export async function getWord(id: string): Promise<Word | undefined> {
@@ -237,8 +242,11 @@ export async function batchUpsertCardStates(states: CardState[]): Promise<void> 
     status: s.status,
   }));
 
-  const { error } = await supabase.from('card_states').upsert(rows);
-  if (error) throw error;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase.from('card_states').upsert(batch);
+    if (error) throw error;
+  }
 }
 
 // ============= Review Logs =============

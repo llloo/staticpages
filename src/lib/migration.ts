@@ -41,6 +41,7 @@ export async function migrateLocalDataToSupabase(): Promise<{
           audio: w.audio || null,
           definitions: w.definitions,
           example: w.example || null,
+          example_cn: w.example_cn || null,
           tags: w.tags || [],
           source: w.source,
           list_id: w.listId || null,
