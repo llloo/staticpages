@@ -195,7 +195,7 @@ export default function WordBankPage() {
                     </div>
                     <div className="word-item-meaning text-secondary">
                       {word.definitions
-                        .map((d) => `${d.pos} ${d.meaning}`)
+                        .map((d) => d.pos ? `${d.pos} ${d.meaning}` : d.meaning)
                         .join('；')}
                     </div>
                   </div>

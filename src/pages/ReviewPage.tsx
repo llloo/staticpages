@@ -284,7 +284,7 @@ export default function ReviewPage() {
             <div className="flashcard-definitions">
               {currentCard.word.definitions.map((def, i) => (
                 <div key={i} className="definition-item">
-                  <span className="definition-pos">{def.pos}</span>
+                  {def.pos && <span className="definition-pos">{def.pos}</span>}
                   <span className="definition-meaning">
                     {def.meaning}
                   </span>

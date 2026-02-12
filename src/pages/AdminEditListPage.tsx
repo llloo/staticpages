@@ -18,7 +18,7 @@ function validateWordListJson(data: unknown): RawWordEntry[] {
     if (!Array.isArray(item.definitions) || item.definitions.length === 0)
       throw new Error(`单词 "${item.word}" 缺少 definitions`);
     for (const def of item.definitions) {
-      if (!def.pos || !def.meaning)
+      if (!def.meaning)
         throw new Error(`单词 "${item.word}" 的释义格式错误`);
     }
   }
@@ -45,7 +45,7 @@ export default function AdminEditListPage() {
   const [editWord, setEditWord] = useState('');
   const [editPhonetic, setEditPhonetic] = useState('');
   const [editAudio, setEditAudio] = useState('');
-  const [editDefs, setEditDefs] = useState<Definition[]>([{ pos: 'n.', meaning: '' }]);
+  const [editDefs, setEditDefs] = useState<Definition[]>([{ pos: '', meaning: '' }]);
   const [editExample, setEditExample] = useState('');
 
   useEffect(() => {
@@ -80,7 +80,7 @@ export default function AdminEditListPage() {
     setEditWord(w.word);
     setEditPhonetic(w.phonetic || '');
     setEditAudio(w.audio || '');
-    setEditDefs(w.definitions.length > 0 ? [...w.definitions] : [{ pos: 'n.', meaning: '' }]);
+    setEditDefs(w.definitions.length > 0 ? [...w.definitions] : [{ pos: '', meaning: '' }]);
     setEditExample(w.example || '');
     setEditingIndex(index);
   };
@@ -89,7 +89,7 @@ export default function AdminEditListPage() {
     setEditWord('');
     setEditPhonetic('');
     setEditAudio('');
-    setEditDefs([{ pos: 'n.', meaning: '' }]);
+    setEditDefs([{ pos: '', meaning: '' }]);
     setEditExample('');
     setEditingIndex(words.length); // new item at end
   };
@@ -245,6 +245,7 @@ export default function AdminEditListPage() {
                   {editDefs.map((def, di) => (
                     <div key={di} className="definition-row">
                       <select className="input pos-select" value={def.pos} onChange={(e) => updateDef(di, 'pos', e.target.value)}>
+                        <option value="">--</option>
                         <option value="n.">n.</option>
                         <option value="v.">v.</option>
                         <option value="adj.">adj.</option>
@@ -267,7 +268,7 @@ export default function AdminEditListPage() {
                       )}
                     </div>
                   ))}
-                  <button className="btn btn-outline add-def-btn" onClick={() => setEditDefs((prev) => [...prev, { pos: 'n.', meaning: '' }])}>
+                  <button className="btn btn-outline add-def-btn" onClick={() => setEditDefs((prev) => [...prev, { pos: '', meaning: '' }])}>
                     + 添加释义
                   </button>
                 </div>
@@ -288,7 +289,7 @@ export default function AdminEditListPage() {
                     {w.phonetic && <span className="admin-word-phonetic">{w.phonetic}</span>}
                   </div>
                   <div className="admin-word-defs text-secondary">
-                    {w.definitions.map((d) => `${d.pos} ${d.meaning}`).join(' / ')}
+                    {w.definitions.map((d) => d.pos ? `${d.pos} ${d.meaning}` : d.meaning).join(' / ')}
                   </div>
                 </div>
                 <div className="admin-word-actions">
@@ -318,6 +319,7 @@ export default function AdminEditListPage() {
                 {editDefs.map((def, di) => (
                   <div key={di} className="definition-row">
                     <select className="input pos-select" value={def.pos} onChange={(e) => updateDef(di, 'pos', e.target.value)}>
+                      <option value="">--</option>
                       <option value="n.">n.</option>
                       <option value="v.">v.</option>
                       <option value="adj.">adj.</option>
@@ -340,7 +342,7 @@ export default function AdminEditListPage() {
                     )}
                   </div>
                 ))}
-                <button className="btn btn-outline add-def-btn" onClick={() => setEditDefs((prev) => [...prev, { pos: 'n.', meaning: '' }])}>
+                <button className="btn btn-outline add-def-btn" onClick={() => setEditDefs((prev) => [...prev, { pos: '', meaning: '' }])}>
                   + 添加释义
                 </button>
               </div>

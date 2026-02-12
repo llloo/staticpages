@@ -15,7 +15,7 @@ export default function AddWordPage() {
   const [phonetic, setPhonetic] = useState('');
   const [audio, setAudio] = useState('');
   const [definitions, setDefinitions] = useState<Definition[]>([
-    { pos: 'n.', meaning: '' },
+    { pos: '', meaning: '' },
   ]);
   const [example, setExample] = useState('');
   const [exampleCn, setExampleCn] = useState('');
@@ -32,7 +32,7 @@ export default function AddWordPage() {
           setDefinitions(
             w.definitions.length > 0
               ? w.definitions
-              : [{ pos: 'n.', meaning: '' }]
+              : [{ pos: '', meaning: '' }]
           );
           setExample(w.example || '');
           setExampleCn(w.example_cn || '');
@@ -44,7 +44,7 @@ export default function AddWordPage() {
   }, [id]);
 
   const addDefinition = () => {
-    setDefinitions([...definitions, { pos: 'n.', meaning: '' }]);
+    setDefinitions([...definitions, { pos: '', meaning: '' }]);
   };
 
   const removeDefinition = (index: number) => {
@@ -144,6 +144,7 @@ export default function AddWordPage() {
               value={def.pos}
               onChange={(e) => updateDefinition(i, 'pos', e.target.value)}
             >
+              <option value="">--</option>
               <option value="n.">n.</option>
               <option value="v.">v.</option>
               <option value="adj.">adj.</option>
