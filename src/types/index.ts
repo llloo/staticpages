@@ -10,6 +10,7 @@ export interface Word {
   audio?: string;
   definitions: Definition[];
   example?: string;
+  example_cn?: string;
   tags: string[];
   source: 'builtin' | 'user';
   listId?: string;
@@ -73,4 +74,5 @@ export interface RawWordEntry {
   audio?: string;
   definitions: Definition[];
   example?: string;
+  example_cn?: string;
 }

@@ -6,7 +6,8 @@
       { "pos": "v.", "meaning": "放弃；抛弃" },
       { "pos": "n.", "meaning": "放纵；放任" }
     ],
-    "example": "He abandoned his plan to travel abroad."
+    "example": "He abandoned his plan to travel abroad.",
+    "example_cn": "他放弃了出国旅行的计划。"
   },
   {
     "word": "absorb",
@@ -14,7 +15,8 @@
     "definitions": [
       { "pos": "v.", "meaning": "吸收；吸引；使全神贯注" }
     ],
-    "example": "The sponge can absorb a lot of water."
+    "example": "The sponge can absorb a lot of water.",
+    "example_cn": "海绵能吸收大量的水。"
   },
   {
     "word": "academic",
@@ -23,7 +25,8 @@
       { "pos": "adj.", "meaning": "学术的；学院的" },
       { "pos": "n.", "meaning": "大学教师；学者" }
     ],
-    "example": "She has an excellent academic record."
+    "example": "She has an excellent academic record.",
+    "example_cn": "她有出色的学术记录。"
   },
   {
     "word": "budget",
@@ -32,7 +35,8 @@
       { "pos": "n.", "meaning": "预算" },
       { "pos": "v.", "meaning": "编预算；安排" }
     ],
-    "example": "We need to stick to a tight budget this month."
+    "example": "We need to stick to a tight budget this month.",
+    "example_cn": "这个月我们需要严格控制预算。"
   },
   {
     "word": "campaign",
@@ -41,6 +45,7 @@
       { "pos": "n.", "meaning": "运动；战役" },
       { "pos": "v.", "meaning": "参加竞选；从事运动" }
     ],
-    "example": "The government launched a campaign against smoking."
+    "example": "The government launched a campaign against smoking.",
+    "example_cn": "政府发起了一场禁烟运动。"
   }
 ]

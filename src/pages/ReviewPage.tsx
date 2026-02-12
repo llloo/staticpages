@@ -296,6 +296,11 @@ export default function ReviewPage() {
                 {currentCard.word.example}
               </div>
             )}
+            {currentCard.word.example_cn && (
+              <div className="flashcard-example-cn">
+                {currentCard.word.example_cn}
+              </div>
+            )}
           </div>
         </div>
       </div>

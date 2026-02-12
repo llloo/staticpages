@@ -18,6 +18,7 @@ export default function AddWordPage() {
     { pos: 'n.', meaning: '' },
   ]);
   const [example, setExample] = useState('');
+  const [exampleCn, setExampleCn] = useState('');
   const [tags, setTags] = useState('');
   const [loading, setLoading] = useState(isEditing);
 
@@ -34,6 +35,7 @@ export default function AddWordPage() {
               : [{ pos: 'n.', meaning: '' }]
           );
           setExample(w.example || '');
+          setExampleCn(w.example_cn || '');
           setTags(w.tags.join(', '));
         }
         setLoading(false);
@@ -71,6 +73,7 @@ export default function AddWordPage() {
       audio: audio.trim() || undefined,
       definitions: definitions.filter((d) => d.meaning.trim()),
       example: example.trim() || undefined,
+      example_cn: exampleCn.trim() || undefined,
       tags: tags
         .split(',')
         .map((t) => t.trim())
@@ -184,6 +187,17 @@ export default function AddWordPage() {
           value={example}
           onChange={(e) => setExample(e.target.value)}
           placeholder="例: He abandoned his family."
+          rows={2}
+        />
+      </div>
+
+      <div className="form-group">
+        <label className="label">例句中文翻译</label>
+        <textarea
+          className="input example-textarea"
+          value={exampleCn}
+          onChange={(e) => setExampleCn(e.target.value)}
+          placeholder="例: 他抛弃了他的家人。"
           rows={2}
         />
       </div>
