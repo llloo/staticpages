@@ -40,6 +40,10 @@ export default function ReviewPage() {
   const [hasWords, setHasWords] = useState(true);
   const [allMastered, setAllMastered] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sessionPhase, setSessionPhase] = useState<'learning' | 'reinforcing'>('learning');
+  const sessionWordsRef = useRef<Map<string, ReviewCard>>(new Map());
+  const sessionQualitiesRef = useRef<Map<string, number>>(new Map());
+  const [reinforceStats, setReinforceStats] = useState({ reviewed: 0, correct: 0, incorrect: 0 });
   const transitionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
@@ -135,6 +139,13 @@ export default function ReviewPage() {
       ]);
       updateStreak().catch(() => {});
 
+      // Track session words for reinforcement (keep latest card state, track worst quality)
+      sessionWordsRef.current.set(word.id, { cardState: updatedCard, word });
+      const prevQuality = sessionQualitiesRef.current.get(word.id);
+      if (prevQuality === undefined || quality < prevQuality) {
+        sessionQualitiesRef.current.set(word.id, quality);
+      }
+
       if (quality < 3) {
         setQueue((prev) => [
           ...prev,
@@ -142,11 +153,24 @@ export default function ReviewPage() {
         ]);
       }
 
-      setSessionStats((prev) => ({
-        reviewed: prev.reviewed + 1,
-        correct: quality >= 3 ? prev.correct + 1 : prev.correct,
-        incorrect: quality < 3 ? prev.incorrect + 1 : prev.incorrect,
-      }));
+      const statsUpdate = {
+        reviewed: 1,
+        correct: quality >= 3 ? 1 : 0,
+        incorrect: quality < 3 ? 1 : 0,
+      };
+      if (sessionPhase === 'reinforcing') {
+        setReinforceStats((prev) => ({
+          reviewed: prev.reviewed + statsUpdate.reviewed,
+          correct: prev.correct + statsUpdate.correct,
+          incorrect: prev.incorrect + statsUpdate.incorrect,
+        }));
+      } else {
+        setSessionStats((prev) => ({
+          reviewed: prev.reviewed + statsUpdate.reviewed,
+          correct: prev.correct + statsUpdate.correct,
+          incorrect: prev.incorrect + statsUpdate.incorrect,
+        }));
+      }
 
       // Fade out then advance
       setIsTransitioning(true);
@@ -161,7 +185,7 @@ export default function ReviewPage() {
         setIsTransitioning(false);
       }, 350);
     },
-    [currentCard, currentIndex, queue.length, isTransitioning]
+    [currentCard, currentIndex, queue.length, isTransitioning, sessionPhase]
   );
 
   const getProjectedInterval = (quality: number): string => {
@@ -180,6 +204,28 @@ export default function ReviewPage() {
       return `${Math.round(result.interval / 30)}个月`;
     return `${Math.round(result.interval / 365)}年`;
   };
+
+  const startReinforcement = useCallback(() => {
+    const words = Array.from(sessionWordsRef.current.values());
+    if (words.length === 0) return;
+
+    const qualities = sessionQualitiesRef.current;
+    // Sort: difficult words first (low quality), then shuffle within same tier
+    const sorted = words.sort((a, b) => {
+      const qa = qualities.get(a.word.id) ?? 5;
+      const qb = qualities.get(b.word.id) ?? 5;
+      if (qa !== qb) return qa - qb;
+      return Math.random() - 0.5;
+    });
+
+    setQueue(sorted);
+    setCurrentIndex(0);
+    setIsFlipped(false);
+    setIsComplete(false);
+    setIsTransitioning(false);
+    setSessionPhase('reinforcing');
+    setReinforceStats({ reviewed: 0, correct: 0, incorrect: 0 });
+  }, []);
 
   if (loading) {
     return <div className="review-page"><div className="loading-text">加载中...</div></div>;
@@ -222,46 +268,57 @@ export default function ReviewPage() {
       );
     }
 
+    const stats = sessionPhase === 'reinforcing' ? reinforceStats : sessionStats;
+    const isReinforcing = sessionPhase === 'reinforcing';
+
     return (
       <div className="review-page">
         <div className="review-complete">
           <div className="complete-icon">&#10003;</div>
-          <h2>今日复习完成</h2>
+          <h2>{isReinforcing ? '巩固完成' : '学习完成'}</h2>
           <div className="complete-stats">
             <div className="complete-stat">
               <span className="complete-stat-number">
-                {sessionStats.reviewed}
+                {stats.reviewed}
               </span>
               <span className="complete-stat-label">已复习</span>
             </div>
             <div className="complete-stat">
               <span className="complete-stat-number correct">
-                {sessionStats.correct}
+                {stats.correct}
               </span>
               <span className="complete-stat-label">记住</span>
             </div>
             <div className="complete-stat">
               <span className="complete-stat-number incorrect">
-                {sessionStats.incorrect}
+                {stats.incorrect}
               </span>
               <span className="complete-stat-label">忘记</span>
             </div>
           </div>
-          {sessionStats.reviewed > 0 && (
+          {stats.reviewed > 0 && (
             <div className="complete-accuracy">
               正确率{' '}
               {Math.round(
-                (sessionStats.correct / sessionStats.reviewed) * 100
+                (stats.correct / stats.reviewed) * 100
               )}
               %
             </div>
           )}
-          <button
-            className="btn btn-primary btn-lg"
-            onClick={() => window.location.reload()}
-          >
-            继续学习
-          </button>
+          <div className="complete-actions">
+            <button
+              className="btn btn-primary btn-lg"
+              onClick={startReinforcement}
+            >
+              {isReinforcing ? '再巩固一轮' : '巩固复习'}
+            </button>
+            <button
+              className="btn-secondary-link"
+              onClick={() => window.location.reload()}
+            >
+              学习新词
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -273,6 +330,7 @@ export default function ReviewPage() {
     <div className="review-page">
       <div className="review-progress">
         <div className="progress-text">
+          {sessionPhase === 'reinforcing' && <span className="phase-badge">巩固复习</span>}
           {currentIndex + 1} / {queue.length}
         </div>
         <div className="progress-bar">
