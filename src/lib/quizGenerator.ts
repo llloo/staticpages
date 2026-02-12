@@ -90,3 +90,32 @@ export async function generateSpellingQuestions(
     audio: word.audio,
   }));
 }
+
+export function generateMCQFromWords(
+  words: Word[],
+  count: number
+): MCQQuestion[] {
+  if (words.length < 4) return [];
+
+  const selected = shuffle(words).slice(0, count);
+  const questions: MCQQuestion[] = [];
+
+  for (const word of selected) {
+    const correctAnswer = word.definitions[0].meaning;
+    const distractors = shuffle(words.filter((w) => w.id !== word.id))
+      .slice(0, 3)
+      .map((w) => w.definitions[0].meaning);
+
+    questions.push({
+      type: 'mcq',
+      wordId: word.id,
+      questionText: word.word,
+      phonetic: word.phonetic,
+      audio: word.audio,
+      correctAnswer,
+      options: shuffle([correctAnswer, ...distractors]),
+    });
+  }
+
+  return questions;
+}
