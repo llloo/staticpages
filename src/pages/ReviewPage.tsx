@@ -99,16 +99,17 @@ export default function ReviewPage() {
       const allCards = [...reviewCards, ...newCards];
       hadNewCardsRef.current = newCards.length > 0;
 
-      // Pre-populate session words from today's review logs (for reinforce/quiz on re-entry)
+      // Pre-populate session words for reinforce/quiz on re-entry
       if (todayNewDone) {
         const todayLogs = await getReviewLogsSince(today);
         const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
+        const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
+        const allStates = await getAllCardStates();
+        const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
+
         if (todayWordIds.length > 0) {
-          const [todayWords, allStates] = await Promise.all([
-            getWordsByIds(todayWordIds),
-            getAllCardStates(),
-          ]);
-          const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
+          // Primary: use today's review logs
+          const todayWords = await getWordsByIds(todayWordIds);
           for (const wordId of todayWordIds) {
             const word = todayWords.get(wordId);
             const card = stateMap.get(wordId);
@@ -117,6 +118,24 @@ export default function ReviewPage() {
               const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
               const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
               sessionQualitiesRef.current.set(wordId, worstQuality);
+            }
+          }
+        }
+
+        // Fallback: if no review logs found (e.g. flush didn't complete), use all learned words
+        if (sessionWordsRef.current.size === 0) {
+          const learnedIds = allStates
+            .filter((c) => c.status !== 'new' && enabledWordIds.has(c.wordId))
+            .map((c) => c.wordId);
+          if (learnedIds.length > 0) {
+            const learnedWords = await getWordsByIds(learnedIds);
+            for (const wordId of learnedIds) {
+              const word = learnedWords.get(wordId);
+              const card = stateMap.get(wordId);
+              if (word && card) {
+                sessionWordsRef.current.set(wordId, { cardState: card, word });
+                sessionQualitiesRef.current.set(wordId, 3);
+              }
             }
           }
         }
@@ -318,6 +337,7 @@ export default function ReviewPage() {
     setReinforceStats({ reviewed: 0, correct: 0, incorrect: 0 });
   }, []);
 
+  const canReinforce = sessionWordsRef.current.size > 0;
   const canQuiz = sessionWordsRef.current.size >= 4;
 
   const startQuiz = useCallback(() => {
@@ -469,12 +489,16 @@ export default function ReviewPage() {
             )}
             <div className="complete-actions">
               <div className="complete-actions-row">
-                <button className="btn btn-primary btn-lg" onClick={startReinforcement}>
-                  巩固复习
-                </button>
-                <button className="btn btn-outline btn-lg" onClick={startQuiz}>
-                  再测一轮
-                </button>
+                {canReinforce && (
+                  <button className="btn btn-primary btn-lg" onClick={startReinforcement}>
+                    巩固复习
+                  </button>
+                )}
+                {canQuiz && (
+                  <button className={`btn ${canReinforce ? 'btn-outline' : 'btn-primary'} btn-lg`} onClick={startQuiz}>
+                    再测一轮
+                  </button>
+                )}
               </div>
               <button className="btn-secondary-link" onClick={() => {
                 localStorage.removeItem(LS_TODAY_NEW_DONE);
@@ -524,15 +548,17 @@ export default function ReviewPage() {
           )}
           <div className="complete-actions">
             <div className="complete-actions-row">
-              <button
-                className="btn btn-primary btn-lg"
-                onClick={startReinforcement}
-              >
-                {isReinforcing ? '再巩固一轮' : '巩固复习'}
-              </button>
+              {canReinforce && (
+                <button
+                  className="btn btn-primary btn-lg"
+                  onClick={startReinforcement}
+                >
+                  {isReinforcing ? '再巩固一轮' : '巩固复习'}
+                </button>
+              )}
               {canQuiz && (
                 <button
-                  className="btn btn-outline btn-lg"
+                  className={`btn ${canReinforce ? 'btn-outline' : 'btn-primary'} btn-lg`}
                   onClick={startQuiz}
                 >
                   快速测验
