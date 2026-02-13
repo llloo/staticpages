@@ -46,6 +46,9 @@ export function calculateNextReview(
         ? Math.max(1.2, newEF * 0.8)
         : newEF;
       newInterval = Math.ceil(interval * multiplier);
+      
+      // Cap at maximum interval to prevent unreasonable long intervals (e.g., 10 years)
+      newInterval = Math.min(newInterval, SM2_DEFAULTS.maxIntervalDays);
     }
   }
 
@@ -58,16 +61,47 @@ export function calculateNextReview(
 
 export function deriveCardStatus(
   repetition: number,
-  interval: number
+  interval: number,
+  consecutiveEasyCount: number,
+  currentStatus: CardState['status']
 ): CardState['status'] {
+  // Check retirement conditions
+  // Condition 1: 5 consecutive "Easy" ratings
+  if (consecutiveEasyCount >= 5) return 'retired';
+  
+  // Condition 2: After mastered, 3 consecutive "Easy" ratings
+  if (currentStatus === 'mastered' && consecutiveEasyCount >= 3) return 'retired';
+  
   if (repetition === 0) return 'learning';
   if (interval >= MASTERY_THRESHOLD_DAYS) return 'mastered';
   return 'review';
 }
 
+/**
+ * Apply fuzz (random variation) to interval to prevent review clustering.
+ * - For intervals > 7 days: ±20% variation
+ * - For intervals 3-7 days: ±1 day variation
+ * - For intervals < 3 days: no variation
+ */
+function applyIntervalFuzz(interval: number): number {
+  if (interval < 3) return interval;
+  
+  if (interval <= 7) {
+    // Small intervals: ±1 day
+    const fuzz = Math.random() < 0.5 ? -1 : 1;
+    return Math.max(interval + fuzz, interval - 1); // Ensure not less than interval-1
+  }
+  
+  // Longer intervals: ±20% variation
+  const fuzzRange = interval * 0.2;
+  const fuzz = (Math.random() * 2 - 1) * fuzzRange; // Random value between -fuzzRange and +fuzzRange
+  return Math.round(interval + fuzz);
+}
+
 export function calculateDueDate(interval: number, fromDate?: Date): string {
   const date = fromDate ? new Date(fromDate) : new Date();
-  date.setDate(date.getDate() + interval);
+  const fuzzedInterval = applyIntervalFuzz(interval);
+  date.setDate(date.getDate() + fuzzedInterval);
   return date.toISOString().split('T')[0];
 }
 
@@ -80,5 +114,6 @@ export function createInitialCardState(wordId: string): CardState {
     repetition: 0,
     dueDate: today,
     status: 'new',
+    consecutiveEasyCount: 0,
   };
 }

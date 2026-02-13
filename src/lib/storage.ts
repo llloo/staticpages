@@ -42,6 +42,7 @@ function toCardState(row: any): CardState {
     dueDate: row.due_date,
     lastReviewDate: row.last_review_date ?? undefined,
     status: row.status,
+    consecutiveEasyCount: row.consecutive_easy_count ?? 0,
   };
 }
 
@@ -224,6 +225,7 @@ export async function upsertCardState(state: CardState): Promise<void> {
     due_date: state.dueDate,
     last_review_date: state.lastReviewDate ?? null,
     status: state.status,
+    consecutive_easy_count: state.consecutiveEasyCount ?? 0,
   });
 
   if (error) throw error;
@@ -240,6 +242,7 @@ export async function batchUpsertCardStates(states: CardState[]): Promise<void> 
     due_date: s.dueDate,
     last_review_date: s.lastReviewDate ?? null,
     status: s.status,
+    consecutive_easy_count: s.consecutiveEasyCount ?? 0,
   }));
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {

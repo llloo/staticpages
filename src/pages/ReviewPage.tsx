@@ -192,10 +192,41 @@ export default function ReviewPage() {
 
     (async () => {
       await flushPendingUpdates();
-      // Only set the flag after data is safely persisted
-      if (sessionPhase === 'learning' && hadNewCardsRef.current) {
+      
+      // Load all today's words into sessionWordsRef for reinforcement/quiz
+      if (sessionPhase === 'learning') {
         const today = new Date().toISOString().split('T')[0];
-        localStorage.setItem(LS_TODAY_NEW_DONE, today);
+        const todayLogs = await getReviewLogsSince(today);
+        const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
+        const settings = await loadSettings();
+        const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
+        
+        if (todayWordIds.length > 0) {
+          const todayWords = await getWordsByIds(todayWordIds);
+          const allStates = await getAllCardStates();
+          const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
+          
+          for (const wordId of todayWordIds) {
+            const word = todayWords.get(wordId);
+            const card = stateMap.get(wordId);
+            if (word && card && enabledWordIds.has(wordId)) {
+              // Update sessionWordsRef with the latest state
+              sessionWordsRef.current.set(wordId, { cardState: card, word });
+              
+              // Track worst quality for this word (if not already tracked)
+              if (!sessionQualitiesRef.current.has(wordId)) {
+                const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
+                const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
+                sessionQualitiesRef.current.set(wordId, worstQuality);
+              }
+            }
+          }
+        }
+        
+        // Only set the flag after data is safely persisted
+        if (hadNewCardsRef.current) {
+          localStorage.setItem(LS_TODAY_NEW_DONE, today);
+        }
       }
     })().catch(() => {});
   }, [isComplete, flushPendingUpdates, sessionPhase]);
@@ -227,6 +258,11 @@ export default function ReviewPage() {
       );
       const newDueDate = calculateDueDate(result.interval);
 
+      // Track consecutive "Easy" (quality=5) ratings
+      const newConsecutiveEasyCount = quality === 5 
+        ? (cardState.consecutiveEasyCount || 0) + 1 
+        : 0;
+
       const updatedCard: CardState = {
         ...cardState,
         easeFactor: result.easeFactor,
@@ -234,7 +270,8 @@ export default function ReviewPage() {
         repetition: result.repetition,
         dueDate: newDueDate,
         lastReviewDate: new Date().toISOString().split('T')[0],
-        status: deriveCardStatus(result.repetition, result.interval),
+        consecutiveEasyCount: newConsecutiveEasyCount,
+        status: deriveCardStatus(result.repetition, result.interval, newConsecutiveEasyCount, cardState.status),
       };
 
       // Buffer updates for batch flush at phase completion
@@ -312,9 +349,8 @@ export default function ReviewPage() {
     if (result.interval === 0) return '< 1天';
     if (result.interval === 1) return '1天';
     if (result.interval < 30) return `${result.interval}天`;
-    if (result.interval < 365)
-      return `${Math.round(result.interval / 30)}个月`;
-    return `${Math.round(result.interval / 365)}年`;
+    const months = Math.round(result.interval / 30);
+    return `${months}个月`;
   };
 
   const startReinforcement = useCallback(() => {
@@ -364,6 +400,10 @@ export default function ReviewPage() {
     const card = await getCardState(wordId);
     if (card) {
       const result = calculateNextReview(quality, card.repetition, card.easeFactor, card.interval);
+      
+      // Quiz mode: only reset count on wrong answer, preserve on correct
+      const newConsecutiveEasyCount = quality < 3 ? 0 : (card.consecutiveEasyCount || 0);
+      
       const updatedCard: CardState = {
         ...card,
         easeFactor: result.easeFactor,
@@ -371,7 +411,8 @@ export default function ReviewPage() {
         repetition: result.repetition,
         dueDate: calculateDueDate(result.interval),
         lastReviewDate: new Date().toISOString().split('T')[0],
-        status: deriveCardStatus(result.repetition, result.interval),
+        consecutiveEasyCount: newConsecutiveEasyCount,
+        status: deriveCardStatus(result.repetition, result.interval, newConsecutiveEasyCount, card.status),
       };
       await upsertCardState(updatedCard);
       await addReviewLog({
