@@ -281,6 +281,19 @@ export async function getAllReviewLogs(): Promise<ReviewLog[]> {
   return (data ?? []).map(toReviewLog);
 }
 
+export async function getReviewLogsSince(since: string): Promise<ReviewLog[]> {
+  const userId = await getUserId();
+  const { data, error } = await supabase
+    .from('review_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('review_date', since)
+    .order('review_date', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).map(toReviewLog);
+}
+
 // ============= Quiz Results =============
 
 export async function addQuizResult(result: QuizResult): Promise<void> {
