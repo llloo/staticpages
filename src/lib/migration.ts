@@ -64,6 +64,7 @@ export async function migrateLocalDataToSupabase(): Promise<{
         due_date: cs.dueDate,
         last_review_date: cs.lastReviewDate || null,
         status: cs.status,
+        consecutive_easy_count: cs.consecutiveEasyCount || 0,
       }));
 
       const { error } = await supabase.from('card_states').upsert(rows);

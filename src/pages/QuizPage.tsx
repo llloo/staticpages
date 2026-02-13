@@ -92,6 +92,10 @@ export default function QuizPage() {
         card.easeFactor,
         card.interval
       );
+      
+      // Quiz mode: only reset count on wrong answer, preserve on correct
+      const newConsecutiveEasyCount = quality < 3 ? 0 : (card.consecutiveEasyCount || 0);
+      
       const updatedCard: CardState = {
         ...card,
         easeFactor: result.easeFactor,
@@ -99,7 +103,8 @@ export default function QuizPage() {
         repetition: result.repetition,
         dueDate: calculateDueDate(result.interval),
         lastReviewDate: new Date().toISOString().split('T')[0],
-        status: deriveCardStatus(result.repetition, result.interval),
+        consecutiveEasyCount: newConsecutiveEasyCount,
+        status: deriveCardStatus(result.repetition, result.interval, newConsecutiveEasyCount, card.status),
       };
       await upsertCardState(updatedCard);
       await addReviewLog({

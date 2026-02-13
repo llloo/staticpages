@@ -18,7 +18,7 @@ export async function getDueCards(
   );
 
   const reviewCards = allCards
-    .filter((c) => c.dueDate <= today && c.status !== 'new')
+    .filter((c) => c.dueDate <= today && c.status !== 'new' && c.status !== 'retired')
     .sort((a, b) => {
       if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
       return a.easeFactor - b.easeFactor;

@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
 export const SM2_DEFAULTS = {
   initialEF: 2.5,
   minimumEF: 1.3,
+  maxIntervalDays: 30,
 } as const;
 
 export const MASTERY_THRESHOLD_DAYS = 21;

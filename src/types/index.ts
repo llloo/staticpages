@@ -23,7 +23,8 @@ export interface CardState {
   repetition: number;
   dueDate: string;
   lastReviewDate?: string;
-  status: 'new' | 'learning' | 'review' | 'mastered';
+  status: 'new' | 'learning' | 'review' | 'mastered' | 'retired';
+  consecutiveEasyCount?: number; // Track consecutive "Easy" ratings
 }
 
 export interface ReviewLog {
