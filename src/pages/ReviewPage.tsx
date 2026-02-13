@@ -11,9 +11,9 @@ import {
   deriveCardStatus,
   calculateDueDate,
 } from '../lib/sm2';
-import { getWordsByIds, upsertCardState, addReviewLog, getAllCardStates, getEnabledWordIds, getCardState, addQuizResult, getReviewLogsSince } from '../lib/storage';
+import { getWordsByIds, batchUpsertCardStates, batchAddReviewLogs, upsertCardState, addReviewLog, getAllCardStates, getEnabledWordIds, getCardState, addQuizResult, getReviewLogsSince } from '../lib/storage';
 import { loadSettings, updateStreak } from '../lib/exportImport';
-import type { CardState, Word } from '../types';
+import type { CardState, Word, ReviewLog } from '../types';
 import AudioButton from '../components/AudioButton';
 import './ReviewPage.css';
 
@@ -60,6 +60,29 @@ export default function ReviewPage() {
   const quizWrongIdsRef = useRef<string[]>([]);
   const hadNewCardsRef = useRef(false);
   const transitionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pendingCardStatesRef = useRef<CardState[]>([]);
+  const pendingReviewLogsRef = useRef<ReviewLog[]>([]);
+
+  const flushPendingUpdates = useCallback(async () => {
+    const cardStates = pendingCardStatesRef.current;
+    const reviewLogs = pendingReviewLogsRef.current;
+    pendingCardStatesRef.current = [];
+    pendingReviewLogsRef.current = [];
+
+    if (cardStates.length === 0 && reviewLogs.length === 0) return;
+
+    // Deduplicate card states — keep only the latest per wordId
+    const stateMap = new Map<string, CardState>();
+    for (const state of cardStates) {
+      stateMap.set(state.wordId, state);
+    }
+
+    await Promise.all([
+      batchUpsertCardStates(Array.from(stateMap.values())),
+      batchAddReviewLogs(reviewLogs),
+    ]);
+    updateStreak().catch(() => {});
+  }, []);
 
   useEffect(() => {
     async function loadQueue() {
@@ -149,6 +172,20 @@ export default function ReviewPage() {
     }
   }, [isComplete, sessionPhase]);
 
+  // Batch flush pending card states and review logs on phase completion
+  useEffect(() => {
+    if (isComplete) {
+      flushPendingUpdates();
+    }
+  }, [isComplete, flushPendingUpdates]);
+
+  // Best-effort flush on unmount (e.g. navigating away mid-session)
+  useEffect(() => {
+    return () => {
+      flushPendingUpdates();
+    };
+  }, [flushPendingUpdates]);
+
   const currentCard = queue[currentIndex];
 
   const handleFlip = () => {
@@ -179,22 +216,19 @@ export default function ReviewPage() {
         status: deriveCardStatus(result.repetition, result.interval),
       };
 
-      // Run API calls in parallel; streak is fire-and-forget
-      await Promise.all([
-        upsertCardState(updatedCard),
-        addReviewLog({
-          id: nanoid(),
-          wordId: word.id,
-          quality,
-          reviewDate: new Date().toISOString(),
-          previousInterval: cardState.interval,
-          newInterval: result.interval,
-          previousEF: cardState.easeFactor,
-          newEF: result.easeFactor,
-          mode: 'review',
-        }),
-      ]);
-      updateStreak().catch(() => {});
+      // Buffer updates for batch flush at phase completion
+      pendingCardStatesRef.current.push(updatedCard);
+      pendingReviewLogsRef.current.push({
+        id: nanoid(),
+        wordId: word.id,
+        quality,
+        reviewDate: new Date().toISOString(),
+        previousInterval: cardState.interval,
+        newInterval: result.interval,
+        previousEF: cardState.easeFactor,
+        newEF: result.easeFactor,
+        mode: 'review',
+      });
 
       // Track session words for reinforcement (keep latest card state, track worst quality)
       sessionWordsRef.current.set(word.id, { cardState: updatedCard, word });
