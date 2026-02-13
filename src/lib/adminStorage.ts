@@ -12,8 +12,6 @@ export interface WordListRecord {
   updatedAt: string;
 }
 
-const BATCH_SIZE = 50;
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function toMetaRecord(row: any): Omit<WordListRecord, 'words'> {
   return {
@@ -74,18 +72,16 @@ export async function createWordList(
   name: string,
   description: string,
   words: RawWordEntry[],
-  createdBy: string
+  _createdBy: string
 ): Promise<string> {
-  const { data, error } = await supabase
-    .from('word_lists')
-    .insert({ name, description, created_by: createdBy })
-    .select('id')
-    .single();
+  const { data, error } = await supabase.rpc('save_word_list', {
+    p_id: null,
+    p_name: name,
+    p_description: description,
+    p_words: words,
+  });
   if (error) throw error;
-
-  const listId = data.id;
-  await insertEntries(listId, words);
-  return listId;
+  return data as string;
 }
 
 export async function updateWordList(
@@ -94,20 +90,13 @@ export async function updateWordList(
   description: string,
   words: RawWordEntry[]
 ): Promise<void> {
-  const { error: metaError } = await supabase
-    .from('word_lists')
-    .update({ name, description })
-    .eq('id', id);
-  if (metaError) throw metaError;
-
-  // Delete old entries and re-insert
-  const { error: deleteError } = await supabase
-    .from('word_list_entries')
-    .delete()
-    .eq('list_id', id);
-  if (deleteError) throw deleteError;
-
-  await insertEntries(id, words);
+  const { error } = await supabase.rpc('save_word_list', {
+    p_id: id,
+    p_name: name,
+    p_description: description,
+    p_words: words,
+  });
+  if (error) throw error;
 }
 
 export async function deleteWordList(id: string): Promise<void> {
@@ -116,25 +105,4 @@ export async function deleteWordList(id: string): Promise<void> {
     .delete()
     .eq('id', id);
   if (error) throw error;
-}
-
-async function insertEntries(listId: string, words: RawWordEntry[]): Promise<void> {
-  if (words.length === 0) return;
-
-  const rows = words.map((w, i) => ({
-    list_id: listId,
-    position: i,
-    word: w.word,
-    phonetic: w.phonetic ?? null,
-    audio: w.audio ?? null,
-    definitions: w.definitions,
-    example: w.example ?? null,
-    example_cn: w.example_cn ?? null,
-  }));
-
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const { error } = await supabase.from('word_list_entries').insert(batch);
-    if (error) throw error;
-  }
 }
