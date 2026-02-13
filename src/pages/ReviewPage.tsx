@@ -424,7 +424,22 @@ export default function ReviewPage() {
   }, [quizIndex, quizTotal, quizCorrect]);
 
   if (loading) {
-    return <div className="review-page"><div className="loading-text">加载中...</div></div>;
+    return (
+      <div className="review-page">
+        <div className="review-progress">
+          <div className="progress-text"><span className="skeleton-text" style={{ width: 48 }} /></div>
+          <div className="progress-bar"><div className="progress-fill" style={{ width: 0 }} /></div>
+        </div>
+        <div className="flashcard-container">
+          <div className="flashcard">
+            <div className="flashcard-front">
+              <div className="skeleton-text" style={{ width: 120, height: 28, margin: '0 auto' }} />
+              <div className="skeleton-text" style={{ width: 80, height: 16, margin: '8px auto 0' }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (isComplete) {
