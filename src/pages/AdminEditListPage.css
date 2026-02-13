@@ -101,3 +101,12 @@
   align-self: flex-start;
   font-size: 13px;
 }
+
+.admin-edit-page .form-actions {
+  position: sticky;
+  bottom: var(--tab-bar-height);
+  background: var(--color-bg);
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border);
+  z-index: 10;
+}
