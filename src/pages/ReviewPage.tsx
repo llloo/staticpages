@@ -66,8 +66,6 @@ export default function ReviewPage() {
   const flushPendingUpdates = useCallback(async () => {
     const cardStates = pendingCardStatesRef.current;
     const reviewLogs = pendingReviewLogsRef.current;
-    pendingCardStatesRef.current = [];
-    pendingReviewLogsRef.current = [];
 
     if (cardStates.length === 0 && reviewLogs.length === 0) return;
 
@@ -81,6 +79,11 @@ export default function ReviewPage() {
       batchUpsertCardStates(Array.from(stateMap.values())),
       batchAddReviewLogs(reviewLogs),
     ]);
+
+    // Only clear refs after successful write (so data isn't lost on failure)
+    pendingCardStatesRef.current = [];
+    pendingReviewLogsRef.current = [];
+
     updateStreak().catch(() => {});
   }, []);
 
@@ -183,20 +186,19 @@ export default function ReviewPage() {
     };
   }, []);
 
-  // Mark today's new word learning as done when the learning phase completes with new cards
+  // Flush pending data and mark today's new learning done (only after successful persistence)
   useEffect(() => {
-    if (isComplete && sessionPhase === 'learning' && hadNewCardsRef.current) {
-      const today = new Date().toISOString().split('T')[0];
-      localStorage.setItem(LS_TODAY_NEW_DONE, today);
-    }
-  }, [isComplete, sessionPhase]);
+    if (!isComplete) return;
 
-  // Batch flush pending card states and review logs on phase completion
-  useEffect(() => {
-    if (isComplete) {
-      flushPendingUpdates();
-    }
-  }, [isComplete, flushPendingUpdates]);
+    (async () => {
+      await flushPendingUpdates();
+      // Only set the flag after data is safely persisted
+      if (sessionPhase === 'learning' && hadNewCardsRef.current) {
+        const today = new Date().toISOString().split('T')[0];
+        localStorage.setItem(LS_TODAY_NEW_DONE, today);
+      }
+    })().catch(() => {});
+  }, [isComplete, flushPendingUpdates, sessionPhase]);
 
   // Best-effort flush on unmount (e.g. navigating away mid-session)
   useEffect(() => {

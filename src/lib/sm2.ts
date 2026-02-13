@@ -31,9 +31,21 @@ export function calculateNextReview(
     if (newRepetition === 1) {
       newInterval = 1;
     } else if (newRepetition === 2) {
-      newInterval = 6;
+      // Quality-dependent second step:
+      // Hard (3): 4 days — need more frequent review
+      // Good (4): 6 days — standard SM2
+      // Easy (5): 8 days — confident, less frequent
+      if (quality === 3) newInterval = 4;
+      else if (quality === 5) newInterval = 8;
+      else newInterval = 6;
     } else {
-      newInterval = Math.ceil(interval * newEF);
+      // Quality-dependent multiplier:
+      // Hard: capped slower growth (min 1.2x, or 80% of EF)
+      // Good/Easy: standard EF (easy naturally has higher EF from +0.10/review)
+      const multiplier = quality === 3
+        ? Math.max(1.2, newEF * 0.8)
+        : newEF;
+      newInterval = Math.ceil(interval * multiplier);
     }
   }
 
