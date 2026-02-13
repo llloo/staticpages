@@ -269,6 +269,29 @@ export async function addReviewLog(log: ReviewLog): Promise<void> {
   if (error) throw error;
 }
 
+export async function batchAddReviewLogs(logs: ReviewLog[]): Promise<void> {
+  if (logs.length === 0) return;
+  const userId = await getUserId();
+  const rows = logs.map((log) => ({
+    id: log.id,
+    user_id: userId,
+    word_id: log.wordId,
+    quality: log.quality,
+    review_date: log.reviewDate,
+    previous_interval: log.previousInterval,
+    new_interval: log.newInterval,
+    previous_ef: log.previousEF,
+    new_ef: log.newEF,
+    mode: log.mode,
+  }));
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase.from('review_logs').insert(batch);
+    if (error) throw error;
+  }
+}
+
 export async function getAllReviewLogs(): Promise<ReviewLog[]> {
   const userId = await getUserId();
   const { data, error } = await supabase
