@@ -570,7 +570,7 @@ export default function ReviewPage() {
                   className="btn btn-primary btn-lg"
                   onClick={startReinforcement}
                 >
-                  {isReinforcing ? '再巩固一轮' : '巩固复习'}
+                  {isReinforcing ? '再次巩固' : '巩固复习'}
                 </button>
               )}
               {canQuiz && (
