@@ -11,7 +11,7 @@ import {
   deriveCardStatus,
   calculateDueDate,
 } from '../lib/sm2';
-import { getWordsByIds, upsertCardState, addReviewLog, getAllCardStates, getEnabledWordIds, getCardState, addQuizResult } from '../lib/storage';
+import { getWordsByIds, upsertCardState, addReviewLog, getAllCardStates, getEnabledWordIds, getCardState, addQuizResult, getReviewLogsSince } from '../lib/storage';
 import { loadSettings, updateStreak } from '../lib/exportImport';
 import type { CardState, Word } from '../types';
 import AudioButton from '../components/AudioButton';
@@ -28,6 +28,8 @@ const QUALITY_BUTTONS = [
   { label: '良好', quality: 4, className: 'rating-good' },
   { label: '简单', quality: 5, className: 'rating-easy' },
 ];
+
+const LS_TODAY_NEW_DONE = 'vocab_today_new_done';
 
 export default function ReviewPage() {
   const navigate = useNavigate();
@@ -56,17 +58,46 @@ export default function ReviewPage() {
   const [quizTotal, setQuizTotal] = useState(0);
   const quizStartTime = useRef(0);
   const quizWrongIdsRef = useRef<string[]>([]);
+  const hadNewCardsRef = useRef(false);
   const transitionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     async function loadQueue() {
       const settings = await loadSettings();
+      const today = new Date().toISOString().split('T')[0];
+      const todayNewDone = localStorage.getItem(LS_TODAY_NEW_DONE) === today;
+
+      const newLimit = todayNewDone ? 0 : settings.dailyNewCardLimit;
       const { reviewCards, newCards } = await getDueCards(
-        settings.dailyNewCardLimit,
+        newLimit,
         settings.dailyReviewLimit,
         settings.enabledListIds
       );
       const allCards = [...reviewCards, ...newCards];
+      hadNewCardsRef.current = newCards.length > 0;
+
+      // Pre-populate session words from today's review logs (for reinforce/quiz on re-entry)
+      if (todayNewDone) {
+        const todayLogs = await getReviewLogsSince(today);
+        const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
+        if (todayWordIds.length > 0) {
+          const [todayWords, allStates] = await Promise.all([
+            getWordsByIds(todayWordIds),
+            getAllCardStates(),
+          ]);
+          const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
+          for (const wordId of todayWordIds) {
+            const word = todayWords.get(wordId);
+            const card = stateMap.get(wordId);
+            if (word && card) {
+              sessionWordsRef.current.set(wordId, { cardState: card, word });
+              const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
+              const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
+              sessionQualitiesRef.current.set(wordId, worstQuality);
+            }
+          }
+        }
+      }
 
       // Batch load all words in a single query
       const wordIds = allCards.map((c) => c.wordId);
@@ -82,6 +113,12 @@ export default function ReviewPage() {
 
       setQueue(reviewQueue);
       if (reviewQueue.length === 0) {
+        // If today's new words are done and we have session words, go straight to completion
+        if (todayNewDone && sessionWordsRef.current.size > 0) {
+          setIsComplete(true);
+          setLoading(false);
+          return;
+        }
         const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
         const enabledStates = (await getAllCardStates()).filter((c) =>
           enabledWordIds.has(c.wordId)
@@ -103,6 +140,14 @@ export default function ReviewPage() {
       if (transitionTimer.current) clearTimeout(transitionTimer.current);
     };
   }, []);
+
+  // Mark today's new word learning as done when the learning phase completes with new cards
+  useEffect(() => {
+    if (isComplete && sessionPhase === 'learning' && hadNewCardsRef.current) {
+      const today = new Date().toISOString().split('T')[0];
+      localStorage.setItem(LS_TODAY_NEW_DONE, today);
+    }
+  }, [isComplete, sessionPhase]);
 
   const currentCard = queue[currentIndex];
 
@@ -397,7 +442,10 @@ export default function ReviewPage() {
                   再测一轮
                 </button>
               </div>
-              <button className="btn-secondary-link" onClick={() => window.location.reload()}>
+              <button className="btn-secondary-link" onClick={() => {
+                localStorage.removeItem(LS_TODAY_NEW_DONE);
+                window.location.reload();
+              }}>
                 学习新词
               </button>
             </div>
@@ -459,7 +507,10 @@ export default function ReviewPage() {
             </div>
             <button
               className="btn-secondary-link"
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                localStorage.removeItem(LS_TODAY_NEW_DONE);
+                window.location.reload();
+              }}
             >
               学习新词
             </button>
