@@ -11,7 +11,7 @@ import {
   deriveCardStatus,
   calculateDueDate,
 } from '../lib/sm2';
-import { getWordsByIds, batchUpsertCardStates, batchAddReviewLogs, upsertCardState, addReviewLog, getAllCardStates, getEnabledWordIds, getCardState, addQuizResult, getReviewLogsSince } from '../lib/storage';
+import { getWordsByIds, batchUpsertCardStates, batchAddReviewLogs, upsertCardState, addReviewLog, getCardStatesByWordIds, getEnabledWordIds, getCardState, addQuizResult, getReviewLogsSince } from '../lib/storage';
 import { loadSettings, updateStreak } from '../lib/exportImport';
 import type { CardState, Word, ReviewLog } from '../types';
 import AudioButton from '../components/AudioButton';
@@ -56,6 +56,7 @@ export default function ReviewPage() {
   const [quizShowResult, setQuizShowResult] = useState(false);
   const [quizCorrect, setQuizCorrect] = useState(0);
   const [quizTotal, setQuizTotal] = useState(0);
+  const [isStartingReinforce, setIsStartingReinforce] = useState(false);
   const quizStartTime = useRef(0);
   const quizWrongIdsRef = useRef<string[]>([]);
   const hadNewCardsRef = useRef(false);
@@ -113,7 +114,7 @@ export default function ReviewPage() {
 
       // Restore session words from localStorage or review logs
       const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
-      const allStates = await getAllCardStates();
+      const allStates = await getCardStatesByWordIds(Array.from(enabledWordIds));
       const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
       
       if (todayWordIds.length > 0) {
@@ -151,9 +152,7 @@ export default function ReviewPage() {
           return;
         }
         const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
-        const enabledStates = (await getAllCardStates()).filter((c) =>
-          enabledWordIds.has(c.wordId)
-        );
+        const enabledStates = await getCardStatesByWordIds(Array.from(enabledWordIds));
         if (enabledStates.length === 0) {
           setHasWords(false);
         } else if (enabledStates.every((c) => c.status === 'mastered')) {
@@ -190,7 +189,7 @@ export default function ReviewPage() {
         
         if (todayWordIds.length > 0) {
           const todayWords = await getWordsByIds(todayWordIds);
-          const allStates = await getAllCardStates();
+          const allStates = await getCardStatesByWordIds(Array.from(enabledWordIds));
           const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
           
           for (const wordId of todayWordIds) {
@@ -365,35 +364,49 @@ export default function ReviewPage() {
   }, [currentCard, currentIndex, queue.length, isTransitioning]);
 
   const startReinforcement = useCallback(async () => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayLogs = await getReviewLogsSince(today);
-    const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
-    if (todayWordIds.length === 0) return;
+    if (isStartingReinforce) return;
+    setIsStartingReinforce(true);
 
-    const allStates = await getAllCardStates();
-    const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
-    const todayWords = await getWordsByIds(todayWordIds);
+    await flushPendingUpdates();
 
-    sessionWordsRef.current.clear();
-    sessionQualitiesRef.current.clear();
+    let words = Array.from(sessionWordsRef.current.values());
 
-    const words: ReviewCard[] = [];
-    for (const wordId of todayWordIds) {
-      const word = todayWords.get(wordId);
-      const card = stateMap.get(wordId);
-      if (!word || !card) continue;
-      words.push({ cardState: card, word });
-      sessionWordsRef.current.set(wordId, { cardState: card, word });
-      const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
-      const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
-      sessionQualitiesRef.current.set(wordId, worstQuality);
+    if (words.length === 0) {
+      const today = new Date().toISOString().split('T')[0];
+      const todayLogs = await getReviewLogsSince(today);
+      const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
+      if (todayWordIds.length === 0) return;
+
+      const allStates = await getCardStatesByWordIds(todayWordIds);
+      const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
+      const todayWords = await getWordsByIds(todayWordIds);
+
+      sessionWordsRef.current.clear();
+      sessionQualitiesRef.current.clear();
+
+      const loadedWords: ReviewCard[] = [];
+      for (const wordId of todayWordIds) {
+        const word = todayWords.get(wordId);
+        const card = stateMap.get(wordId);
+        if (!word || !card) continue;
+        loadedWords.push({ cardState: card, word });
+        sessionWordsRef.current.set(wordId, { cardState: card, word });
+        const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
+        const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
+        sessionQualitiesRef.current.set(wordId, worstQuality);
+      }
+
+      words = loadedWords;
     }
 
-    if (words.length === 0) return;
+    if (words.length === 0) {
+      setIsStartingReinforce(false);
+      return;
+    }
 
     const qualities = sessionQualitiesRef.current;
     // Sort: difficult words first (low quality), then shuffle within same tier
-    const sorted = words.sort((a, b) => {
+    const sorted = [...words].sort((a, b) => {
       const qa = qualities.get(a.word.id) ?? 5;
       const qb = qualities.get(b.word.id) ?? 5;
       if (qa !== qb) return qa - qb;
@@ -407,7 +420,8 @@ export default function ReviewPage() {
     setIsTransitioning(false);
     setSessionPhase('reinforcing');
     setReinforceStats({ reviewed: 0, correct: 0, incorrect: 0 });
-  }, []);
+    setIsStartingReinforce(false);
+  }, [flushPendingUpdates, isStartingReinforce]);
 
   const canReinforce = todayLogWordCount > 0;
   const canQuiz = todayLogWordCount >= 4;
@@ -582,8 +596,12 @@ export default function ReviewPage() {
             <div className="complete-actions">
               <div className="complete-actions-row">
                 {canReinforce && (
-                  <button className="btn btn-primary btn-lg" onClick={startReinforcement}>
-                    巩固复习
+                  <button
+                    className="btn btn-primary btn-lg"
+                    onClick={startReinforcement}
+                    disabled={isStartingReinforce}
+                  >
+                    {isStartingReinforce ? '准备中...' : '巩固复习'}
                   </button>
                 )}
                 {canQuiz && (
@@ -648,8 +666,9 @@ export default function ReviewPage() {
                 <button
                   className="btn btn-primary btn-lg"
                   onClick={startReinforcement}
+                  disabled={isStartingReinforce}
                 >
-                  {isReinforcing ? '再次巩固' : '巩固复习'}
+                  {isStartingReinforce ? '准备中...' : (isReinforcing ? '再次巩固' : '巩固复习')}
                 </button>
               )}
               {canQuiz && (
