@@ -154,11 +154,8 @@ export default function ReviewPage() {
         if (enabledWordIds.size === 0) {
           setHasWords(false);
         } else {
-          // Check if all enabled words are mastered (use limit to avoid fetching all)
-          const sampleStates = await getCardStatesByWordIds(Array.from(enabledWordIds).slice(0, 100));
-          if (sampleStates.length > 0 && sampleStates.every((c) => c.status === 'mastered')) {
-            setAllMastered(true);
-          }
+          // If we have enabled words but no cards to review, likely all mastered
+          setAllMastered(true);
         }
         setIsComplete(true);
       }
@@ -191,8 +188,8 @@ export default function ReviewPage() {
         
         if (todayWordIds.length > 0) {
           const todayWords = await getWordsByIds(todayWordIds);
-          const allStates = await getCardStatesByWordIds(Array.from(enabledWordIds));
-          const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
+          const todayCardStates = await getCardStatesByWordIds(todayWordIds);
+          const stateMap = new Map(todayCardStates.map((s) => [s.wordId, s]));
           
           for (const wordId of todayWordIds) {
             const word = todayWords.get(wordId);
