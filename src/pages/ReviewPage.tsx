@@ -11,7 +11,7 @@ import {
   deriveCardStatus,
   calculateDueDate,
 } from '../lib/sm2';
-import { getWordsByIds, batchUpsertCardStates, batchAddReviewLogs, upsertCardState, addReviewLog, getCardStatesByWordIds, getEnabledWordIds, getCardState, addQuizResult, getReviewLogsSince } from '../lib/storage';
+import { getWordsByIds, batchUpsertCardStates, batchAddReviewLogs, upsertCardState, addReviewLog, getTodayCardStates, getEnabledWordIds, getCardState, addQuizResult, getReviewLogsSince } from '../lib/storage';
 import { loadSettings, updateStreak } from '../lib/exportImport';
 import type { CardState, Word, ReviewLog } from '../types';
 import AudioButton from '../components/AudioButton';
@@ -114,7 +114,7 @@ export default function ReviewPage() {
 
       // Restore session words from today's review logs
       if (todayWordIds.length > 0) {
-        const todayCardStates = await getCardStatesByWordIds(todayWordIds);
+        const todayCardStates = await getTodayCardStates(today);
         const stateMap = new Map(todayCardStates.map((s) => [s.wordId, s]));
         const todayWords = await getWordsByIds(todayWordIds);
         
@@ -188,7 +188,7 @@ export default function ReviewPage() {
         
         if (todayWordIds.length > 0) {
           const todayWords = await getWordsByIds(todayWordIds);
-          const todayCardStates = await getCardStatesByWordIds(todayWordIds);
+          const todayCardStates = await getTodayCardStates(today);
           const stateMap = new Map(todayCardStates.map((s) => [s.wordId, s]));
           
           for (const wordId of todayWordIds) {
@@ -376,7 +376,7 @@ export default function ReviewPage() {
       const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
       if (todayWordIds.length === 0) return;
 
-      const allStates = await getCardStatesByWordIds(todayWordIds);
+      const allStates = await getTodayCardStates(today);
       const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
       const todayWords = await getWordsByIds(todayWordIds);
 
