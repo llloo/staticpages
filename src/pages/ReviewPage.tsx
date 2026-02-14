@@ -112,17 +112,16 @@ export default function ReviewPage() {
       const allCards = [...reviewCards, ...filteredNewCards];
       hadNewCardsRef.current = filteredNewCards.length > 0;
 
-      // Restore session words from localStorage or review logs
-      const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
-      const allStates = await getCardStatesByWordIds(Array.from(enabledWordIds));
-      const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
-      
+      // Restore session words from today's review logs
       if (todayWordIds.length > 0) {
+        const todayCardStates = await getCardStatesByWordIds(todayWordIds);
+        const stateMap = new Map(todayCardStates.map((s) => [s.wordId, s]));
         const todayWords = await getWordsByIds(todayWordIds);
+        
         for (const wordId of todayWordIds) {
           const word = todayWords.get(wordId);
           const card = stateMap.get(wordId);
-          if (word && card && enabledWordIds.has(wordId)) {
+          if (word && card) {
             sessionWordsRef.current.set(wordId, { cardState: card, word });
             const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
             const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
@@ -152,11 +151,14 @@ export default function ReviewPage() {
           return;
         }
         const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
-        const enabledStates = await getCardStatesByWordIds(Array.from(enabledWordIds));
-        if (enabledStates.length === 0) {
+        if (enabledWordIds.size === 0) {
           setHasWords(false);
-        } else if (enabledStates.every((c) => c.status === 'mastered')) {
-          setAllMastered(true);
+        } else {
+          // Check if all enabled words are mastered (use limit to avoid fetching all)
+          const sampleStates = await getCardStatesByWordIds(Array.from(enabledWordIds).slice(0, 100));
+          if (sampleStates.length > 0 && sampleStates.every((c) => c.status === 'mastered')) {
+            setAllMastered(true);
+          }
         }
         setIsComplete(true);
       }
