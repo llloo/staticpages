@@ -76,6 +76,7 @@ function toQuizResult(row: any): QuizResult {
 // ============= Words =============
 
 const BATCH_SIZE = 50;
+const QUERY_IN_BATCH = 50;
 
 export async function addWords(words: Word[]): Promise<void> {
   const userId = await getUserId();
@@ -116,17 +117,21 @@ export async function getWord(id: string): Promise<Word | undefined> {
 export async function getWordsByIds(ids: string[]): Promise<Map<string, Word>> {
   if (ids.length === 0) return new Map();
   const userId = await getUserId();
-  const { data, error } = await supabase
-    .from('words')
-    .select('*')
-    .eq('user_id', userId)
-    .in('id', ids);
-
-  if (error) throw error;
   const map = new Map<string, Word>();
-  for (const row of data ?? []) {
-    const word = toWord(row);
-    map.set(word.id, word);
+
+  for (let i = 0; i < ids.length; i += QUERY_IN_BATCH) {
+    const batch = ids.slice(i, i + QUERY_IN_BATCH);
+    const { data, error } = await supabase
+      .from('words')
+      .select('*')
+      .eq('user_id', userId)
+      .in('id', batch);
+
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const word = toWord(row);
+      map.set(word.id, word);
+    }
   }
   return map;
 }
@@ -217,14 +222,22 @@ export async function getAllCardStates(): Promise<CardState[]> {
 export async function getCardStatesByWordIds(ids: string[]): Promise<CardState[]> {
   if (ids.length === 0) return [];
   const userId = await getUserId();
-  const { data, error } = await supabase
-    .from('card_states')
-    .select('*')
-    .eq('user_id', userId)
-    .in('word_id', ids);
+  const results: CardState[] = [];
 
-  if (error) throw error;
-  return (data ?? []).map(toCardState);
+  for (let i = 0; i < ids.length; i += QUERY_IN_BATCH) {
+    const batch = ids.slice(i, i + QUERY_IN_BATCH);
+    const { data, error } = await supabase
+      .from('card_states')
+      .select('*')
+      .eq('user_id', userId)
+      .in('word_id', batch);
+
+    if (error) throw error;
+    for (const row of data ?? []) {
+      results.push(toCardState(row));
+    }
+  }
+  return results;
 }
 
 export async function upsertCardState(state: CardState): Promise<void> {
