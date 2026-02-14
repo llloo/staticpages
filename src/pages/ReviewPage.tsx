@@ -30,7 +30,6 @@ const QUALITY_BUTTONS = [
 ];
 
 const LS_TODAY_NEW_DONE = 'vocab_today_new_done';
-const LS_TODAY_SESSION_WORDS = 'vocab_today_session_words';
 
 export default function ReviewPage() {
   const navigate = useNavigate();
@@ -93,23 +92,6 @@ export default function ReviewPage() {
       const settings = await loadSettings();
       const today = new Date().toISOString().split('T')[0];
       const todayNewDone = localStorage.getItem(LS_TODAY_NEW_DONE) === today;
-      
-      // Restore today's session words from localStorage (critical for re-entry)
-      const sessionWordsData = localStorage.getItem(LS_TODAY_SESSION_WORDS);
-      const sessionWordIds = new Set<string>();
-      if (sessionWordsData) {
-        try {
-          const parsed = JSON.parse(sessionWordsData);
-          if (parsed.date === today && Array.isArray(parsed.wordIds)) {
-            parsed.wordIds.forEach((id: string) => sessionWordIds.add(id));
-          } else {
-            // Clear stale data from previous day
-            localStorage.removeItem(LS_TODAY_SESSION_WORDS);
-          }
-        } catch {
-          localStorage.removeItem(LS_TODAY_SESSION_WORDS);
-        }
-      }
 
       const newLimit = todayNewDone ? 0 : settings.dailyNewCardLimit;
       const { reviewCards, newCards } = await getDueCards(
@@ -118,8 +100,12 @@ export default function ReviewPage() {
         settings.enabledListIds
       );
       
+      const todayLogs = await getReviewLogsSince(today);
+      const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
+      const todayWordIdSet = new Set(todayWordIds);
+
       // Exclude already-learned words from today's session
-      const filteredNewCards = newCards.filter((c) => !sessionWordIds.has(c.wordId));
+      const filteredNewCards = newCards.filter((c) => !todayWordIdSet.has(c.wordId));
       const allCards = [...reviewCards, ...filteredNewCards];
       hadNewCardsRef.current = filteredNewCards.length > 0;
 
@@ -128,41 +114,16 @@ export default function ReviewPage() {
       const allStates = await getAllCardStates();
       const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
       
-      if (sessionWordIds.size > 0) {
-        // Restore from localStorage (most reliable for re-entry)
-        const sessionWords = await getWordsByIds(Array.from(sessionWordIds));
-        const todayLogs = await getReviewLogsSince(today);
-        
-        for (const wordId of sessionWordIds) {
-          const word = sessionWords.get(wordId);
+      if (todayWordIds.length > 0) {
+        const todayWords = await getWordsByIds(todayWordIds);
+        for (const wordId of todayWordIds) {
+          const word = todayWords.get(wordId);
           const card = stateMap.get(wordId);
           if (word && card && enabledWordIds.has(wordId)) {
             sessionWordsRef.current.set(wordId, { cardState: card, word });
             const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
-            if (wordLogs.length > 0) {
-              const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
-              sessionQualitiesRef.current.set(wordId, worstQuality);
-            } else {
-              sessionQualitiesRef.current.set(wordId, 3);
-            }
-          }
-        }
-      } else if (todayNewDone) {
-        // Fallback: restore from review logs if localStorage is missing
-        const todayLogs = await getReviewLogsSince(today);
-        const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
-
-        if (todayWordIds.length > 0) {
-          const todayWords = await getWordsByIds(todayWordIds);
-          for (const wordId of todayWordIds) {
-            const word = todayWords.get(wordId);
-            const card = stateMap.get(wordId);
-            if (word && card && enabledWordIds.has(wordId)) {
-              sessionWordsRef.current.set(wordId, { cardState: card, word });
-              const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
-              const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
-              sessionQualitiesRef.current.set(wordId, worstQuality);
-            }
+            const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
+            sessionQualitiesRef.current.set(wordId, worstQuality);
           }
         }
       }
@@ -318,14 +279,6 @@ export default function ReviewPage() {
         sessionQualitiesRef.current.set(word.id, quality);
       }
       
-      // Persist session words to localStorage immediately to survive page switches
-      const today = new Date().toISOString().split('T')[0];
-      const sessionWordIds = Array.from(sessionWordsRef.current.keys());
-      localStorage.setItem(LS_TODAY_SESSION_WORDS, JSON.stringify({
-        date: today,
-        wordIds: sessionWordIds
-      }));
-
       if (quality < 3) {
         setQueue((prev) => [
           ...prev,
@@ -686,7 +639,6 @@ export default function ReviewPage() {
               className="btn-secondary-link"
               onClick={() => {
                 localStorage.removeItem(LS_TODAY_NEW_DONE);
-                localStorage.removeItem(LS_TODAY_SESSION_WORDS);
                 window.location.reload();
               }}
             >
