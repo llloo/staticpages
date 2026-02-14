@@ -214,6 +214,19 @@ export async function getAllCardStates(): Promise<CardState[]> {
   return (data ?? []).map(toCardState);
 }
 
+export async function getCardStatesByWordIds(ids: string[]): Promise<CardState[]> {
+  if (ids.length === 0) return [];
+  const userId = await getUserId();
+  const { data, error } = await supabase
+    .from('card_states')
+    .select('*')
+    .eq('user_id', userId)
+    .in('word_id', ids);
+
+  if (error) throw error;
+  return (data ?? []).map(toCardState);
+}
+
 export async function upsertCardState(state: CardState): Promise<void> {
   const userId = await getUserId();
   const { error } = await supabase.from('card_states').upsert({
