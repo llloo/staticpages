@@ -30,6 +30,7 @@ const QUALITY_BUTTONS = [
 ];
 
 const LS_TODAY_NEW_DONE = 'vocab_today_new_done';
+const LS_TODAY_SESSION_WORDS = 'vocab_today_session_words';
 
 export default function ReviewPage() {
   const navigate = useNavigate();
@@ -92,6 +93,23 @@ export default function ReviewPage() {
       const settings = await loadSettings();
       const today = new Date().toISOString().split('T')[0];
       const todayNewDone = localStorage.getItem(LS_TODAY_NEW_DONE) === today;
+      
+      // Restore today's session words from localStorage (critical for re-entry)
+      const sessionWordsData = localStorage.getItem(LS_TODAY_SESSION_WORDS);
+      const sessionWordIds = new Set<string>();
+      if (sessionWordsData) {
+        try {
+          const parsed = JSON.parse(sessionWordsData);
+          if (parsed.date === today && Array.isArray(parsed.wordIds)) {
+            parsed.wordIds.forEach((id: string) => sessionWordIds.add(id));
+          } else {
+            // Clear stale data from previous day
+            localStorage.removeItem(LS_TODAY_SESSION_WORDS);
+          }
+        } catch {
+          localStorage.removeItem(LS_TODAY_SESSION_WORDS);
+        }
+      }
 
       const newLimit = todayNewDone ? 0 : settings.dailyNewCardLimit;
       const { reviewCards, newCards } = await getDueCards(
@@ -99,46 +117,51 @@ export default function ReviewPage() {
         settings.dailyReviewLimit,
         settings.enabledListIds
       );
-      const allCards = [...reviewCards, ...newCards];
-      hadNewCardsRef.current = newCards.length > 0;
+      
+      // Exclude already-learned words from today's session
+      const filteredNewCards = newCards.filter((c) => !sessionWordIds.has(c.wordId));
+      const allCards = [...reviewCards, ...filteredNewCards];
+      hadNewCardsRef.current = filteredNewCards.length > 0;
 
-      // Pre-populate session words for reinforce/quiz on re-entry
-      if (todayNewDone) {
+      // Restore session words from localStorage or review logs
+      const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
+      const allStates = await getAllCardStates();
+      const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
+      
+      if (sessionWordIds.size > 0) {
+        // Restore from localStorage (most reliable for re-entry)
+        const sessionWords = await getWordsByIds(Array.from(sessionWordIds));
+        const todayLogs = await getReviewLogsSince(today);
+        
+        for (const wordId of sessionWordIds) {
+          const word = sessionWords.get(wordId);
+          const card = stateMap.get(wordId);
+          if (word && card && enabledWordIds.has(wordId)) {
+            sessionWordsRef.current.set(wordId, { cardState: card, word });
+            const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
+            if (wordLogs.length > 0) {
+              const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
+              sessionQualitiesRef.current.set(wordId, worstQuality);
+            } else {
+              sessionQualitiesRef.current.set(wordId, 3);
+            }
+          }
+        }
+      } else if (todayNewDone) {
+        // Fallback: restore from review logs if localStorage is missing
         const todayLogs = await getReviewLogsSince(today);
         const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
-        const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
-        const allStates = await getAllCardStates();
-        const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
 
         if (todayWordIds.length > 0) {
-          // Primary: use today's review logs
           const todayWords = await getWordsByIds(todayWordIds);
           for (const wordId of todayWordIds) {
             const word = todayWords.get(wordId);
             const card = stateMap.get(wordId);
-            if (word && card) {
+            if (word && card && enabledWordIds.has(wordId)) {
               sessionWordsRef.current.set(wordId, { cardState: card, word });
               const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
               const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
               sessionQualitiesRef.current.set(wordId, worstQuality);
-            }
-          }
-        }
-
-        // Fallback: if no review logs found (e.g. flush didn't complete), use all learned words
-        if (sessionWordsRef.current.size === 0) {
-          const learnedIds = allStates
-            .filter((c) => c.status !== 'new' && enabledWordIds.has(c.wordId))
-            .map((c) => c.wordId);
-          if (learnedIds.length > 0) {
-            const learnedWords = await getWordsByIds(learnedIds);
-            for (const wordId of learnedIds) {
-              const word = learnedWords.get(wordId);
-              const card = stateMap.get(wordId);
-              if (word && card) {
-                sessionWordsRef.current.set(wordId, { cardState: card, word });
-                sessionQualitiesRef.current.set(wordId, 3);
-              }
             }
           }
         }
@@ -294,6 +317,14 @@ export default function ReviewPage() {
       if (prevQuality === undefined || quality < prevQuality) {
         sessionQualitiesRef.current.set(word.id, quality);
       }
+      
+      // Persist session words to localStorage immediately to survive page switches
+      const today = new Date().toISOString().split('T')[0];
+      const sessionWordIds = Array.from(sessionWordsRef.current.keys());
+      localStorage.setItem(LS_TODAY_SESSION_WORDS, JSON.stringify({
+        date: today,
+        wordIds: sessionWordIds
+      }));
 
       if (quality < 3) {
         setQueue((prev) => [
@@ -352,6 +383,30 @@ export default function ReviewPage() {
     const months = Math.round(result.interval / 30);
     return `${months}个月`;
   };
+
+  const handleNextCard = useCallback(() => {
+    if (!currentCard || isTransitioning) return;
+
+    // In reinforcing phase, just count as reviewed without updating card state
+    setReinforceStats((prev) => ({
+      reviewed: prev.reviewed + 1,
+      correct: prev.correct,
+      incorrect: prev.incorrect,
+    }));
+
+    // Fade out then advance
+    setIsTransitioning(true);
+    setIsFlipped(false);
+
+    transitionTimer.current = setTimeout(() => {
+      if (currentIndex + 1 >= queue.length) {
+        setIsComplete(true);
+      } else {
+        setCurrentIndex((prev) => prev + 1);
+      }
+      setIsTransitioning(false);
+    }, 350);
+  }, [currentCard, currentIndex, queue.length, isTransitioning]);
 
   const startReinforcement = useCallback(() => {
     const words = Array.from(sessionWordsRef.current.values());
@@ -582,20 +637,24 @@ export default function ReviewPage() {
               </span>
               <span className="complete-stat-label">已复习</span>
             </div>
-            <div className="complete-stat">
-              <span className="complete-stat-number correct">
-                {stats.correct}
-              </span>
-              <span className="complete-stat-label">记住</span>
-            </div>
-            <div className="complete-stat">
-              <span className="complete-stat-number incorrect">
-                {stats.incorrect}
-              </span>
-              <span className="complete-stat-label">忘记</span>
-            </div>
+            {!isReinforcing && (
+              <>
+                <div className="complete-stat">
+                  <span className="complete-stat-number correct">
+                    {stats.correct}
+                  </span>
+                  <span className="complete-stat-label">记住</span>
+                </div>
+                <div className="complete-stat">
+                  <span className="complete-stat-number incorrect">
+                    {stats.incorrect}
+                  </span>
+                  <span className="complete-stat-label">忘记</span>
+                </div>
+              </>
+            )}
           </div>
-          {stats.reviewed > 0 && (
+          {stats.reviewed > 0 && !isReinforcing && (
             <div className="complete-accuracy">
               正确率{' '}
               {Math.round(
@@ -627,6 +686,7 @@ export default function ReviewPage() {
               className="btn-secondary-link"
               onClick={() => {
                 localStorage.removeItem(LS_TODAY_NEW_DONE);
+                localStorage.removeItem(LS_TODAY_SESSION_WORDS);
                 window.location.reload();
               }}
             >
@@ -758,18 +818,28 @@ export default function ReviewPage() {
 
       {isFlipped && !isTransitioning && (
         <div className="rating-buttons">
-          {QUALITY_BUTTONS.map((btn) => (
+          {sessionPhase === 'reinforcing' ? (
             <button
-              key={btn.quality}
-              className={`rating-btn ${btn.className}`}
-              onClick={() => handleRating(btn.quality)}
+              className="btn btn-primary btn-lg btn-block"
+              onClick={handleNextCard}
+              style={{ margin: '0 auto', maxWidth: '300px' }}
             >
-              <span className="rating-label">{btn.label}</span>
-              <span className="rating-interval">
-                {getProjectedInterval(btn.quality)}
-              </span>
+              下一个
             </button>
-          ))}
+          ) : (
+            QUALITY_BUTTONS.map((btn) => (
+              <button
+                key={btn.quality}
+                className={`rating-btn ${btn.className}`}
+                onClick={() => handleRating(btn.quality)}
+              >
+                <span className="rating-label">{btn.label}</span>
+                <span className="rating-interval">
+                  {getProjectedInterval(btn.quality)}
+                </span>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
