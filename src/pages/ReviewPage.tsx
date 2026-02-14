@@ -59,6 +59,7 @@ export default function ReviewPage() {
   const quizStartTime = useRef(0);
   const quizWrongIdsRef = useRef<string[]>([]);
   const hadNewCardsRef = useRef(false);
+  const [todayLogWordCount, setTodayLogWordCount] = useState(0);
   const transitionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pendingCardStatesRef = useRef<CardState[]>([]);
   const pendingReviewLogsRef = useRef<ReviewLog[]>([]);
@@ -103,6 +104,7 @@ export default function ReviewPage() {
       const todayLogs = await getReviewLogsSince(today);
       const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
       const todayWordIdSet = new Set(todayWordIds);
+      setTodayLogWordCount(todayWordIds.length);
 
       // Exclude already-learned words from today's session
       const filteredNewCards = newCards.filter((c) => !todayWordIdSet.has(c.wordId));
@@ -182,6 +184,7 @@ export default function ReviewPage() {
         const today = new Date().toISOString().split('T')[0];
         const todayLogs = await getReviewLogsSince(today);
         const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
+        setTodayLogWordCount(todayWordIds.length);
         const settings = await loadSettings();
         const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
         
@@ -361,8 +364,34 @@ export default function ReviewPage() {
     }, 350);
   }, [currentCard, currentIndex, queue.length, isTransitioning]);
 
-  const startReinforcement = useCallback(() => {
-    const words = Array.from(sessionWordsRef.current.values());
+  const startReinforcement = useCallback(async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const todayLogs = await getReviewLogsSince(today);
+    const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
+    if (todayWordIds.length === 0) return;
+
+    const settings = await loadSettings();
+    const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
+    const allStates = await getAllCardStates();
+    const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
+    const todayWords = await getWordsByIds(todayWordIds);
+
+    sessionWordsRef.current.clear();
+    sessionQualitiesRef.current.clear();
+
+    const words: ReviewCard[] = [];
+    for (const wordId of todayWordIds) {
+      if (!enabledWordIds.has(wordId)) continue;
+      const word = todayWords.get(wordId);
+      const card = stateMap.get(wordId);
+      if (!word || !card) continue;
+      words.push({ cardState: card, word });
+      sessionWordsRef.current.set(wordId, { cardState: card, word });
+      const wordLogs = todayLogs.filter((l) => l.wordId === wordId);
+      const worstQuality = Math.min(...wordLogs.map((l) => l.quality));
+      sessionQualitiesRef.current.set(wordId, worstQuality);
+    }
+
     if (words.length === 0) return;
 
     const qualities = sessionQualitiesRef.current;
@@ -383,8 +412,8 @@ export default function ReviewPage() {
     setReinforceStats({ reviewed: 0, correct: 0, incorrect: 0 });
   }, []);
 
-  const canReinforce = sessionWordsRef.current.size > 0;
-  const canQuiz = sessionWordsRef.current.size >= 4;
+  const canReinforce = todayLogWordCount > 0;
+  const canQuiz = todayLogWordCount >= 4;
 
   const startQuiz = useCallback(() => {
     const words = Array.from(sessionWordsRef.current.values()).map((r) => r.word);
