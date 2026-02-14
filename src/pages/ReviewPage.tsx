@@ -370,8 +370,6 @@ export default function ReviewPage() {
     const todayWordIds = [...new Set(todayLogs.map((l) => l.wordId))];
     if (todayWordIds.length === 0) return;
 
-    const settings = await loadSettings();
-    const enabledWordIds = await getEnabledWordIds(settings.enabledListIds);
     const allStates = await getAllCardStates();
     const stateMap = new Map(allStates.map((s) => [s.wordId, s]));
     const todayWords = await getWordsByIds(todayWordIds);
@@ -381,7 +379,6 @@ export default function ReviewPage() {
 
     const words: ReviewCard[] = [];
     for (const wordId of todayWordIds) {
-      if (!enabledWordIds.has(wordId)) continue;
       const word = todayWords.get(wordId);
       const card = stateMap.get(wordId);
       if (!word || !card) continue;
