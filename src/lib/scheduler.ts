@@ -13,10 +13,9 @@ export async function getDueCards(
 ): Promise<ScheduledQueue> {
   const today = new Date().toISOString().split('T')[0];
   const enabledWordIds = await getEnabledWordIds(enabledListIds);
-  const wordIdsArray = Array.from(enabledWordIds);
 
-  const reviewCards = await getDueCardStates(wordIdsArray, today, dailyReviewLimit);
-  const newCards = await getNewCardStates(wordIdsArray, dailyNewLimit);
+  const reviewCards = await getDueCardStates(enabledWordIds, today, dailyReviewLimit);
+  const newCards = await getNewCardStates(enabledWordIds, dailyNewLimit);
 
   return { reviewCards, newCards };
 }

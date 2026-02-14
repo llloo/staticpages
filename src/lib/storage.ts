@@ -241,63 +241,75 @@ export async function getCardStatesByWordIds(ids: string[]): Promise<CardState[]
 }
 
 export async function getDueCardStates(
-  wordIds: string[],
+  enabledWordIds: Set<string>,
   today: string,
   limit: number
 ): Promise<CardState[]> {
-  if (wordIds.length === 0) return [];
   const userId = await getUserId();
-  const results: CardState[] = [];
+  
+  // Query all due cards without word_id filter
+  const { data, error } = await supabase
+    .from('card_states')
+    .select('*')
+    .eq('user_id', userId)
+    .lte('due_date', today)
+    .not('status', 'in', '("new","retired")')
+    .order('due_date', { ascending: true })
+    .order('ease_factor', { ascending: true });
 
-  for (let i = 0; i < wordIds.length; i += QUERY_IN_BATCH) {
-    const batch = wordIds.slice(i, i + QUERY_IN_BATCH);
-    const { data, error } = await supabase
-      .from('card_states')
-      .select('*')
-      .eq('user_id', userId)
-      .in('word_id', batch)
-      .lte('due_date', today)
-      .not('status', 'in', '("new","retired")');
+  if (error) throw error;
+  
+  // Filter by enabled words in app layer
+  const results = (data ?? [])
+    .map(toCardState)
+    .filter((c) => enabledWordIds.has(c.wordId))
+    .slice(0, limit);
 
-    if (error) throw error;
-    for (const row of data ?? []) {
-      results.push(toCardState(row));
-    }
-  }
-
-  // Sort by due date then ease factor
-  results.sort((a, b) => {
-    if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-    return a.easeFactor - b.easeFactor;
-  });
-
-  return results.slice(0, limit);
+  return results;
 }
 
 export async function getNewCardStates(
-  wordIds: string[],
+  enabledWordIds: Set<string>,
   limit: number
 ): Promise<CardState[]> {
-  if (wordIds.length === 0) return [];
   const userId = await getUserId();
-  const results: CardState[] = [];
+  
+  // Query all new cards without word_id filter
+  const { data, error } = await supabase
+    .from('card_states')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'new');
 
-  for (let i = 0; i < wordIds.length; i += QUERY_IN_BATCH) {
-    const batch = wordIds.slice(i, i + QUERY_IN_BATCH);
-    const { data, error } = await supabase
-      .from('card_states')
-      .select('*')
-      .eq('user_id', userId)
-      .in('word_id', batch)
-      .eq('status', 'new');
+  if (error) throw error;
+  
+  // Filter by enabled words in app layer
+  const results = (data ?? [])
+    .map(toCardState)
+    .filter((c) => enabledWordIds.has(c.wordId))
+    .slice(0, limit);
 
-    if (error) throw error;
-    for (const row of data ?? []) {
-      results.push(toCardState(row));
-    }
-  }
+  return results;
+}
 
-  return results.slice(0, limit);
+export async function getTodayCardStates(today: string): Promise<CardState[]> {
+  const userId = await getUserId();
+  
+  // Get distinct word_ids from today's review logs
+  const { data: logData, error: logError } = await supabase
+    .from('review_logs')
+    .select('word_id')
+    .eq('user_id', userId)
+    .gte('review_date', today)
+    .lt('review_date', new Date(new Date(today).getTime() + 86400000).toISOString());
+  
+  if (logError) throw logError;
+  if (!logData || logData.length === 0) return [];
+  
+  const wordIds = [...new Set(logData.map((row: any) => row.word_id as string))];
+  
+  // Fetch card states for these words
+  return getCardStatesByWordIds(wordIds);
 }
 
 export async function upsertCardState(state: CardState): Promise<void> {
