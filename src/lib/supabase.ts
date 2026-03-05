@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabaseProxyUrl =
-  import.meta.env.VITE_SUPABASE_PROXY_URL ?? 'https://supabase-proxy.libinlong123.workers.dev';
+  import.meta.env.VITE_SUPABASE_PROXY_URL ?? 'https://supabase.proxy.spf13.fun';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
